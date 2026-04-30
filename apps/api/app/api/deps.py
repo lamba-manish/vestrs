@@ -30,6 +30,7 @@ from app.adapters.accreditation import (
     AccreditationProvider,
     MockAccreditationAdapter,
 )
+from app.adapters.bank import BankProvider, MockBankAdapter
 from app.adapters.kyc import KycProvider, MockKycAdapter
 from app.core.config import Settings, get_settings
 from app.core.errors import DomainError, ErrorCode, ForbiddenError
@@ -44,11 +45,13 @@ from app.db.session import get_session
 from app.models.user import User
 from app.repositories.accreditation import AccreditationRepository
 from app.repositories.audit_logs import AuditLogRepository
+from app.repositories.bank import BankRepository
 from app.repositories.kyc import KycRepository
 from app.repositories.refresh_tokens import RefreshTokenRepository
 from app.repositories.users import UserRepository
 from app.services.accreditation import AccreditationService
 from app.services.auth import AuthService, RequestContext
+from app.services.bank import BankService
 from app.services.kyc import KycService
 from app.services.users import UserService
 
@@ -162,6 +165,30 @@ def accreditation_service(
 
 AccreditationProviderDep = Annotated[AccreditationProvider, Depends(accreditation_provider)]
 AccreditationServiceDep = Annotated[AccreditationService, Depends(accreditation_service)]
+
+
+# ---- Bank adapter (process-singleton) + service --------------------------
+
+_bank_provider: BankProvider = MockBankAdapter()
+
+
+def bank_provider() -> BankProvider:
+    return _bank_provider
+
+
+def bank_service(
+    session: SessionDep,
+    provider: Annotated[BankProvider, Depends(bank_provider)],
+) -> BankService:
+    return BankService(
+        bank=BankRepository(session),
+        audit=AuditLogRepository(session),
+        provider=provider,
+    )
+
+
+BankProviderDep = Annotated[BankProvider, Depends(bank_provider)]
+BankServiceDep = Annotated[BankService, Depends(bank_service)]
 
 
 # ---- token-derived caller (no DB hit) -------------------------------------

@@ -98,7 +98,7 @@ async def app(monkeypatch: pytest.MonkeyPatch, _migrated_db_url: str) -> FastAPI
         conn.execute(
             text(
                 "TRUNCATE refresh_tokens, audit_logs, kyc_checks, "
-                "accreditation_checks, users RESTART IDENTITY CASCADE"
+                "accreditation_checks, bank_accounts, users RESTART IDENTITY CASCADE"
             )
         )
     sync_engine.dispose()

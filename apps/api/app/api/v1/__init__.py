@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.api.v1.accreditation import router as accreditation_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.bank import router as bank_router
 from app.api.v1.kyc import router as kyc_router
 from app.api.v1.users import router as users_router
 
@@ -14,3 +15,4 @@ api_router.include_router(auth_router)
 api_router.include_router(users_router)
 api_router.include_router(kyc_router)
 api_router.include_router(accreditation_router)
+api_router.include_router(bank_router)
