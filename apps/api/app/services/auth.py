@@ -106,8 +106,13 @@ class AuthService:
         user = await self.users.get_by_email(email)
         # Constant-ish work even on miss: hash a dummy password so timing
         # doesn't reveal whether the email exists.
+        # NOTE on user enumeration: distinguishing "email not found" from
+        # "wrong password" lets an attacker probe registration state. We do
+        # it because the product owner asked for specific UX. Recommend
+        # reverting to a single AUTH_INVALID_CREDENTIALS code before going
+        # live; tracked in CLAUDE.md sec.8.
         if user is None:
-            verify_password(password, _DUMMY_HASH)
+            verify_password(password, _DUMMY_HASH)  # constant-ish work
             await AuditLogRepository.write_independent(
                 action=AuditAction.AUTH_LOGIN_FAILED,
                 status=AuditStatus.FAILURE,
@@ -116,7 +121,10 @@ class AuthService:
                 user_agent=ctx.user_agent,
                 metadata={"reason": "user_not_found"},
             )
-            raise AuthError("Invalid email or password.")
+            err = DomainError("Account with this email does not exist.")
+            err.code = ErrorCode.AUTH_EMAIL_NOT_FOUND
+            err.http_status = 401
+            raise err
 
         if not verify_password(password, user.password_hash):
             await AuditLogRepository.write_independent(
@@ -128,7 +136,10 @@ class AuthService:
                 user_agent=ctx.user_agent,
                 metadata={"reason": "bad_password"},
             )
-            raise AuthError("Invalid email or password.")
+            err = DomainError("Password is incorrect.")
+            err.code = ErrorCode.AUTH_PASSWORD_INCORRECT
+            err.http_status = 401
+            raise err
 
         issued = await self._issue_tokens_for(user, family_id=None, ctx=ctx)
         await self.audit.write(

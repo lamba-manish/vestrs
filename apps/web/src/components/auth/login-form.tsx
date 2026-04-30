@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api";
 import { useLogin } from "@/lib/auth";
+import { userMessage } from "@/lib/error-messages";
 import { type LoginValues, loginSchema } from "@/lib/schemas/auth";
 
 export function LoginForm() {
@@ -25,15 +26,26 @@ export function LoginForm() {
       toast.success("Welcome back.");
     } catch (e) {
       if (e instanceof ApiError) {
+        // For login errors, attach the message to the relevant field rather
+        // than a toast — far less noisy and points the user at what to fix.
+        if (e.code === "AUTH_EMAIL_NOT_FOUND") {
+          setError("email", { message: userMessage(e) });
+          return;
+        }
+        if (e.code === "AUTH_PASSWORD_INCORRECT") {
+          setError("password", { message: userMessage(e) });
+          return;
+        }
         if (e.details) {
           for (const [field, msgs] of Object.entries(e.details)) {
             setError(field as keyof LoginValues, { message: msgs[0] });
           }
-        } else {
-          toast.error(e.message, {
-            description: e.requestId ? `Request ID · ${e.requestId}` : undefined,
-          });
+          return;
         }
+        // Unknown server error — log the request id for support correlation
+        // but show the user a clean message.
+        console.error("login_failed", { code: e.code, requestId: e.requestId });
+        toast.error(userMessage(e));
       } else {
         toast.error("Something went wrong. Please try again.");
       }

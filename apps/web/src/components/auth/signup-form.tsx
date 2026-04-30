@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api";
 import { useSignup } from "@/lib/auth";
+import { userMessage } from "@/lib/error-messages";
 import { type SignupValues, signupSchema } from "@/lib/schemas/auth";
 
 export function SignupForm() {
@@ -28,15 +29,19 @@ export function SignupForm() {
       toast.success("Account created.");
     } catch (e) {
       if (e instanceof ApiError) {
+        // Email already taken — surface on the email field.
+        if (e.code === "CONFLICT") {
+          setError("email", { message: "An account with this email already exists." });
+          return;
+        }
         if (e.details) {
           for (const [field, msgs] of Object.entries(e.details)) {
             setError(field as keyof SignupValues, { message: msgs[0] });
           }
-        } else {
-          toast.error(e.message, {
-            description: e.requestId ? `Request ID · ${e.requestId}` : undefined,
-          });
+          return;
         }
+        console.error("signup_failed", { code: e.code, requestId: e.requestId });
+        toast.error(userMessage(e));
       } else {
         toast.error("Something went wrong. Please try again.");
       }

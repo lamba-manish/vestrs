@@ -266,6 +266,23 @@ Rules:
 - Passwords hashed with **argon2id** (`argon2-cffi`), parameters in config.
 - Logout revokes the current refresh family.
 
+**User-enumeration trade-off (deviation from standard practice):** the
+backend currently distinguishes `AUTH_EMAIL_NOT_FOUND` vs
+`AUTH_PASSWORD_INCORRECT` on login failure, instead of a single generic
+`AUTH_INVALID_CREDENTIALS`. Product-owner decision for clearer UX. It
+does mean an attacker can probe registration state by typing emails into
+the login form. Banks (Stripe, Coinbase, Schwab) all use the vague
+message for this reason; for HNW investors, knowing whether a specific
+email has a Vestrs account is itself sensitive. Reverting is two
+two-line changes in `app/services/auth.py:login()` and the matching
+codes/tests. Tracked as a hardening decision before going live.
+
+**Frontend never echoes raw `error.message` or `request_id` to users.**
+All toast / inline copy goes through `apps/web/src/lib/error-messages.ts`,
+which maps stable `error.code` values to user-friendly strings. The
+`request_id` is logged to the browser console for support correlation
+only.
+
 ## 9. Audit log schema
 
 Table `audit_logs`:

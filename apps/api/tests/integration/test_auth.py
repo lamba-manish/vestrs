@@ -71,7 +71,7 @@ async def test_login_unknown_email_401(client: AsyncClient, db_session: AsyncSes
         "/api/v1/auth/login", json={"email": "nope@example.com", "password": "whatever"}
     )
     assert r.status_code == 401
-    assert r.json()["error"]["code"] == "AUTH_INVALID_CREDENTIALS"
+    assert r.json()["error"]["code"] == "AUTH_EMAIL_NOT_FOUND"
     actions = await _audit_actions(db_session)
     assert (AuditAction.AUTH_LOGIN_FAILED, AuditStatus.FAILURE) in actions
 
@@ -81,7 +81,7 @@ async def test_login_wrong_password_401(client: AsyncClient, db_session: AsyncSe
     client.cookies.clear()
     r = await client.post("/api/v1/auth/login", json={"email": EMAIL, "password": "wrong"})
     assert r.status_code == 401
-    assert r.json()["error"]["code"] == "AUTH_INVALID_CREDENTIALS"
+    assert r.json()["error"]["code"] == "AUTH_PASSWORD_INCORRECT"
 
 
 async def test_login_success_sets_cookies(client: AsyncClient, db_session: AsyncSession) -> None:
