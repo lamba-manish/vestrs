@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from enum import StrEnum
 from functools import lru_cache
+from typing import Annotated, Any
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class AppEnv(StrEnum):
@@ -35,9 +36,29 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://vestrs:change_me_in_local@postgres:5432/vestrs"
     redis_url: str = "redis://redis:6379/0"
 
-    cors_allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    # NoDecode disables pydantic-settings' implicit JSON parsing so the
+    # validator below sees the raw env string and can accept comma-separated
+    # input (more readable in .env files than embedded JSON).
+    cors_allow_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:3000"]
+    )
 
     log_level: str = "INFO"
+
+    @field_validator("cors_allow_origins", mode="before")
+    @classmethod
+    def _split_cors_origins(cls, value: Any) -> Any:
+        # Accept JSON list (`["a","b"]`), comma-separated (`a,b`), or single value.
+        if isinstance(value, str):
+            import json
+
+            stripped = value.strip()
+            if not stripped:
+                return []
+            if stripped.startswith("["):
+                return json.loads(stripped)
+            return [item.strip() for item in stripped.split(",") if item.strip()]
+        return value
 
     @property
     def is_local(self) -> bool:
