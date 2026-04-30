@@ -60,6 +60,9 @@ repos:
           - pydantic>=2.9
           - pydantic-settings>=2.6
           - fastapi>=0.115
+          - structlog>=24.4
+          - uuid6>=2024.7.10
+          - types-redis>=4.6
 
   # ---------- javascript / typescript / json / md / css ----------
   - repo: https://github.com/rbubley/mirrors-prettier
