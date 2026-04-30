@@ -26,3 +26,19 @@ class UserRepository:
         self.session.add(user)
         await self.session.flush()  # populate user.id without committing
         return user
+
+    async def update_profile(
+        self,
+        *,
+        user: User,
+        full_name: str,
+        nationality: str,
+        domicile: str,
+        phone: str,
+    ) -> User:
+        user.full_name = full_name
+        user.nationality = nationality
+        user.domicile = domicile
+        user.phone = phone
+        await self.session.flush()
+        return user

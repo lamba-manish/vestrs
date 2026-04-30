@@ -13,7 +13,6 @@ from fastapi import APIRouter, Cookie, Depends, Request, Response
 
 from app.api.deps import (
     AuthServiceDep,
-    CurrentUserDep,
     RefreshCookieDep,
     RequestCtxDep,
     TokenSubjectDep,
@@ -123,23 +122,12 @@ async def logout(
 
 @router.get(
     "/me",
-    summary="Return the authenticated user (from token claims, no DB hit)",
+    summary="Return the authenticated user from the access-token claims (no DB hit)",
 )
 async def me(request: Request, subject: TokenSubjectDep) -> dict[str, object]:
-    # Identity comes from the access-token claims, not the DB. Profile fields
-    # (slice 5+) will live behind their own endpoint that does hit the DB.
+    # Identity comes from the access-token claims, not the DB. The full
+    # profile lives behind GET /api/v1/users/me which hits the DB.
     return success_envelope(
         {"id": str(subject.id), "email": subject.email},
-        request_id=request.state.request_id,
-    )
-
-
-@router.get(
-    "/profile",
-    summary="Return the authenticated user's full profile (DB-fresh)",
-)
-async def profile(request: Request, user: CurrentUserDep) -> dict[str, object]:
-    return success_envelope(
-        UserPublic.model_validate(user).model_dump(mode="json"),
         request_id=request.state.request_id,
     )

@@ -68,6 +68,8 @@ repos:
           - argon2-cffi>=23.1
           - pyjwt[crypto]>=2.10
           - email-validator>=2.0
+          - phonenumbers>=8.13
+          - pycountry>=24.6
 
   # ---------- javascript / typescript / json / md / css ----------
   - repo: https://github.com/rbubley/mirrors-prettier
