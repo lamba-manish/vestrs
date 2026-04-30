@@ -22,9 +22,18 @@ EXPOSE 3000
 CMD ["pnpm", "dev"]
 
 # ---------- builder (vite -> dist/) ----------
+#
+# Vite inlines `import.meta.env.VITE_*` at build time, so the API URL
+# and app-env label have to be present here, not at runtime. release.yml
+# passes them as --build-args based on the target env; the local
+# defaults in `apps/web/src/lib/env.ts` cover dev (`pnpm dev`).
 FROM base AS builder
 WORKDIR /app
 ENV NODE_ENV=production
+ARG VITE_API_URL
+ARG VITE_APP_ENV=production
+ENV VITE_API_URL=$VITE_API_URL \
+    VITE_APP_ENV=$VITE_APP_ENV
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm build

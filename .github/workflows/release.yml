@@ -93,6 +93,27 @@ jobs:
             echo "all=${base}:${sha},${base}:sha-${short},${base}:${floating}"
           } >> "$GITHUB_OUTPUT"
 
+      # Per-env build args — only meaningful for the web image. Vite
+      # inlines `import.meta.env.VITE_*` at build time, so the API URL
+      # has to be baked in here. The api image ignores these args.
+      - name: Compose build args (web)
+        id: build_args
+        if: matrix.image.name == 'web'
+        env:
+          TARGET: ${{ needs.resolve-env.outputs.target }}
+        run: |
+          if [ "$TARGET" = "production" ]; then
+            api="https://api.vestrs.manishlamba.com"
+          else
+            api="https://staging-api.vestrs.manishlamba.com"
+          fi
+          {
+            echo "args<<EOF"
+            echo "VITE_API_URL=${api}"
+            echo "VITE_APP_ENV=${TARGET}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build (load locally for scan)
         uses: docker/build-push-action@v6
         with:
@@ -101,6 +122,7 @@ jobs:
           push: false
           load: true
           tags: ${{ steps.tags.outputs.primary }}
+          build-args: ${{ steps.build_args.outputs.args }}
           cache-from: type=gha,scope=release-${{ matrix.image.name }}
           cache-to: type=gha,scope=release-${{ matrix.image.name }},mode=max
 
@@ -129,6 +151,7 @@ jobs:
           target: ${{ matrix.image.target }}
           push: true
           tags: ${{ steps.tags.outputs.all }}
+          build-args: ${{ steps.build_args.outputs.args }}
           cache-from: type=gha,scope=release-${{ matrix.image.name }}
           # No cache-to here — already populated by the scan-build step.
           provenance: false

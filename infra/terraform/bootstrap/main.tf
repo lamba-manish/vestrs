@@ -23,16 +23,17 @@ terraform {
     }
   }
 
-  # First apply runs against a local backend; once the bucket exists,
-  # uncomment the block below + `terraform init -migrate-state`.
-  #
-  # backend "s3" {
-  #   bucket         = "vestrs-tfstate"
-  #   key            = "bootstrap/terraform.tfstate"
-  #   region         = "ap-south-1"
-  #   dynamodb_table = "vestrs-tfstate-lock"
-  #   encrypt        = true
-  # }
+  # State is in the bucket the very first apply created; new operators
+  # run `terraform init -migrate-state` once on first checkout. (Or
+  # comment this block out for a fresh-account first apply, then put
+  # it back.)
+  backend "s3" {
+    bucket         = "vestrs-tfstate"
+    key            = "bootstrap/terraform.tfstate"
+    region         = "ap-south-1"
+    dynamodb_table = "vestrs-tfstate-lock"
+    encrypt        = true
+  }
 }
 
 provider "aws" {

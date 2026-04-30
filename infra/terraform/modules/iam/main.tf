@@ -38,17 +38,20 @@ resource "aws_iam_role_policy_attachment" "cw_agent" {
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
 
-# Inline policy bound to the bucket the env stack provisions.
+# Inline policy bound to the bucket the env stack provisions. The
+# `count` conditional was originally written against
+# `var.backups_bucket_arn == null` so an env could opt out, but in
+# practice every env passes a real ARN, and that ARN is computed
+# from a not-yet-created S3 bucket — terraform refuses the count at
+# plan time. Both env stacks always wire backups, so make the policy
+# unconditional.
 resource "aws_iam_role_policy" "backups" {
-  count  = var.backups_bucket_arn == null ? 0 : 1
   name   = "vestrs-${var.env}-ec2-backups"
   role   = aws_iam_role.ec2.id
-  policy = data.aws_iam_policy_document.backups[0].json
+  policy = data.aws_iam_policy_document.backups.json
 }
 
 data "aws_iam_policy_document" "backups" {
-  count = var.backups_bucket_arn == null ? 0 : 1
-
   statement {
     actions = [
       "s3:PutObject",
