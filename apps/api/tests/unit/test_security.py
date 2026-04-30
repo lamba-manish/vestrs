@@ -6,6 +6,7 @@ import pytest
 
 from app.core.errors import DomainError, ErrorCode
 from app.core.security import (
+    Role,
     TokenType,
     decode_token,
     hash_password,
@@ -46,12 +47,27 @@ def test_refresh_hash_is_stable() -> None:
 def test_access_token_round_trip() -> None:
     user_id = new_jti()
     jti = new_jti()
-    token, _exp = issue_access_token(user_id, jti)
+    token, _exp = issue_access_token(user_id, jti, email="caller@example.com", role=Role.USER)
     payload = decode_token(token, expected=TokenType.ACCESS)
     assert payload.sub == user_id
     assert payload.jti == jti
     assert payload.type is TokenType.ACCESS
     assert payload.family_id is None
+    assert payload.email == "caller@example.com"
+    assert payload.role is Role.USER
+
+
+def test_access_token_carries_admin_role() -> None:
+    token, _ = issue_access_token(new_jti(), new_jti(), email="root@example.com", role=Role.ADMIN)
+    payload = decode_token(token, expected=TokenType.ACCESS)
+    assert payload.role is Role.ADMIN
+
+
+def test_refresh_token_does_not_carry_role_or_email() -> None:
+    token, _ = issue_refresh_token(new_jti(), new_jti(), new_jti())
+    payload = decode_token(token, expected=TokenType.REFRESH)
+    assert payload.email is None
+    assert payload.role is Role.USER  # default fallback
 
 
 def test_refresh_token_round_trip() -> None:
@@ -65,8 +81,7 @@ def test_refresh_token_round_trip() -> None:
 
 
 def test_decode_rejects_wrong_type() -> None:
-    user_id = new_jti()
-    token, _ = issue_access_token(user_id, new_jti())
+    token, _ = issue_access_token(new_jti(), new_jti(), email="x@example.com", role=Role.USER)
     with pytest.raises(DomainError) as exc:
         decode_token(token, expected=TokenType.REFRESH)
     assert exc.value.code is ErrorCode.AUTH_TOKEN_INVALID

@@ -99,11 +99,27 @@ async def test_me_requires_access_cookie(client: AsyncClient) -> None:
     assert r.json()["error"]["code"] == "AUTH_TOKEN_INVALID"
 
 
-async def test_me_returns_user_when_authenticated(client: AsyncClient) -> None:
+async def test_me_returns_token_subject_without_admin_flag(
+    client: AsyncClient,
+) -> None:
     await client.post("/api/v1/auth/signup", json={"email": EMAIL, "password": PASSWORD})
     r = await client.get("/api/v1/auth/me")
     assert r.status_code == 200
-    assert r.json()["data"]["email"] == EMAIL
+    body = r.json()["data"]
+    assert body["email"] == EMAIL
+    assert "id" in body
+    # Role / privilege state is intentionally NOT exposed in the response;
+    # the FE never gates UI on it.
+    assert "is_admin" not in body
+    assert "role" not in body
+
+
+async def test_signup_response_omits_admin_flag(client: AsyncClient) -> None:
+    r = await client.post("/api/v1/auth/signup", json={"email": EMAIL, "password": PASSWORD})
+    assert r.status_code == 201
+    user = r.json()["data"]["user"]
+    assert "is_admin" not in user
+    assert "role" not in user
 
 
 async def test_refresh_rotates_tokens(client: AsyncClient) -> None:

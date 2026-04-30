@@ -14,12 +14,11 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
+from alembic.command import upgrade
+from alembic.config import Config
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import create_engine, text
-
-from alembic.command import upgrade
-from alembic.config import Config
 
 API_ROOT = Path(__file__).resolve().parent.parent.parent
 
