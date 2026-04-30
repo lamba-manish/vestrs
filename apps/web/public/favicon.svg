@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Vestrs">
+  <defs>
+    <linearGradient id="champagne" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E5C98A"/>
+      <stop offset="1" stop-color="#A88748"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="6" fill="#0a0a0a"/>
+  <path d="M7.2 9 L16 22 L24.8 9" stroke="url(#champagne)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <line x1="11.5" y1="26" x2="20.5" y2="26" stroke="url(#champagne)" stroke-width="1.1" stroke-linecap="round" opacity="0.55"/>
+</svg>
