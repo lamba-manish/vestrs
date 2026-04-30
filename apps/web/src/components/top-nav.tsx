@@ -11,12 +11,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useLogout, useMe } from "@/lib/auth";
 
 export function TopNav() {
   const me = useMe();
   const logout = useLogout();
+
+  // Render decision rule: if we have a positively-resolved user, show the
+  // account dropdown; otherwise (loading OR anonymous) show the
+  // sign-in/open-account CTAs immediately. Most first paints are
+  // anonymous visitors, and showing a 24px skeleton while /me resolves
+  // makes the page feel cold for 2-3s on the first hit. The brief flash
+  // for authenticated users is the lesser evil — tanstack-query has a
+  // 60s staleTime, so subsequent navigations don't re-flash.
+  const authed = !me.isLoading && me.data;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -31,14 +39,12 @@ export function TopNav() {
         <nav className="flex items-center gap-1">
           <ThemeToggle />
 
-          {me.isLoading ? (
-            <Skeleton className="h-10 w-24" />
-          ) : me.data ? (
+          {authed ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="gap-2">
                   <UserIcon className="size-4" />
-                  <span className="max-w-[12rem] truncate text-sm">{me.data.email}</span>
+                  <span className="max-w-[12rem] truncate text-sm">{me.data!.email}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-56">
