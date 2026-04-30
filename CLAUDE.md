@@ -346,7 +346,62 @@ Quality:
 - `make gitleaks` — secret scan (host binary or docker fallback)
 - `trivy image vestrs-api:local` (lands in CI at slice 13)
 
-## 17. Git identity (personal account on a multi-account Mac)
+## 17. Frontend design bar (ultra-premium investor product)
+
+The audience is **HNW/UHNW investors**. The frontend must look and feel
+like a private-banking / family-office product, not generic SaaS.
+
+**Visual identity**
+- Restrained luxury: deep neutrals (off-black, ivory, slate), a single
+  accent (gold/champagne or deep emerald). Generous whitespace. No bright
+  primary blue, no neon gradients, no glassmorphism.
+- Typography: serif for display (Fraunces / Playfair Display), grotesk
+  for UI (Inter / Geist). Strong type scale, generous line-height.
+- Iconography: thin-stroke (1.5px), one consistent set (Lucide / Phosphor).
+- No emojis in product UI.
+
+**Theming**
+- Light + dark + system, switchable from a top-bar toggle and persisted.
+  Dark is the default ("after-hours" feel).
+- All colors via CSS variables that Tailwind reads — no per-component dark
+  classes; themed from one place.
+- WCAG AA on every text/background pair; AAA on body copy where possible.
+
+**Motion**
+- 150–250ms, subtle, purposeful. Respect `prefers-reduced-motion`.
+- Page transitions: fade + 4px translate. Step transitions: slide.
+- `framer-motion` for orchestrated transitions, CSS for hover/focus.
+
+**UX rules**
+- Mobile-first; usable at 360px width.
+- Onboarding is a stepper with progress, back navigation, per-step saved
+  state.
+- Every async action has three states: loading (skeleton, not page
+  spinner), success (concise confirm), failure (`error.code` → human copy
+  + retry CTA + `Request ID: …` line for support).
+- Forms: 44px minimum tap targets, labels above inputs, validation on blur
+  (not keystroke), inline error messages adjacent to the field.
+- Keyboard: full nav, visible focus rings, ESC closes modals, TAB order
+  matches reading order.
+- Test with VoiceOver before shipping a slice.
+
+**Components**
+- shadcn/ui primitives only. Never raw HTML inputs/buttons.
+- Sonner for toasts (top-right desktop, bottom mobile).
+- Never expose internal error details. Render `error.message` from the
+  envelope.
+
+**Performance**
+- LCP < 1.5s on 4G, INP < 200ms.
+- Per-route code-split, dynamic-import heavy bits.
+- `pnpm lint` and `pnpm typecheck` clean on every PR.
+- One Playwright happy-path per visible flow minimum.
+
+**Forbidden**
+- Generic Bootstrap / Material look. Centered card on colored background.
+- "Powered by …" footers. Auto-playing animations. Stock fintech imagery.
+
+## 18. Git identity (personal account on a multi-account Mac)
 
 This repo belongs to the **personal** GitHub account `lamba-manish`. The
 machine also hosts a work account; identities are kept apart by:
@@ -375,7 +430,7 @@ git remote -v           # must use github.com-personal alias
 Never use `git config --global` or edit `~/.gitconfig*` from this
 project's tasks.
 
-## 18. Branch model + push cadence
+## 19. Branch model + push cadence
 
 Branches:
 
