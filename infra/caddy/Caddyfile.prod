@@ -1,0 +1,89 @@
+# Caddy config — production.
+#
+# Two virtual hosts:
+#   vestrs.manishlamba.com       → static SPA from /srv/web
+#   api.vestrs.manishlamba.com   → reverse-proxy to api:8000
+#
+# Identical to the staging config except for hostnames and the CSP
+# connect-src. Keep them in lock-step when you change either.
+
+{
+	email {$ACME_EMAIL}
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+# ----------------------------------------------------------------------
+#   Frontend  ·  https://vestrs.manishlamba.com
+# ----------------------------------------------------------------------
+vestrs.manishlamba.com {
+	encode zstd gzip
+
+	root * /srv/web
+	file_server
+
+	@notfile {
+		not file
+		not path /assets/*
+	}
+	rewrite @notfile /index.html
+
+	@assets {
+		path /assets/*
+	}
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	header / Cache-Control "no-cache"
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), camera=(), microphone=(), interest-cohort=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self' https://api.vestrs.manishlamba.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+
+	respond /healthz "ok" 200
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# ----------------------------------------------------------------------
+#   API  ·  https://api.vestrs.manishlamba.com
+# ----------------------------------------------------------------------
+api.vestrs.manishlamba.com {
+	encode zstd gzip
+
+	reverse_proxy api:8000 {
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto https
+		transport http {
+			dial_timeout 5s
+			read_timeout 60s
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+:80 {
+	respond /healthz "ok" 200
+}

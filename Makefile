@@ -80,6 +80,20 @@ trivy: ## scan built api+web images locally (HIGH+CRITICAL fail)
 	    --ignorefile /work/.trivyignore --exit-code 1 $$img || exit 1; \
 	done
 
+# ---------- release / deploy (slice 14A) ----------
+
+deploy-staging: ## run deploy.sh against staging (must be on target host)
+	bash infra/scripts/deploy.sh staging
+
+deploy-prod: ## run deploy.sh against production (must be on target host)
+	bash infra/scripts/deploy.sh production
+
+compose-config-staging: ## render the staging compose file with vars expanded
+	docker compose -f infra/compose/docker-compose.staging.yml --env-file .env.staging config
+
+compose-config-prod: ## render the prod compose file with vars expanded
+	docker compose -f infra/compose/docker-compose.prod.yml --env-file .env.production config
+
 # ---------- e2e ----------
 
 e2e: ## run Playwright against the running compose stack
@@ -105,4 +119,4 @@ ci-local: ## run the full CI matrix locally (lint+types+tests+build, BE+FE)
 	$(MAKE) gitleaks
 	@echo "ci-local: all gates passed"
 
-.PHONY: help bootstrap up down restart logs ps api-shell web-shell api-test api-lint web-test web-lint clean hooks-install hooks-run hooks-update gitleaks trivy e2e e2e-install ci-local
+.PHONY: help bootstrap up down restart logs ps api-shell web-shell api-test api-lint web-test web-lint clean hooks-install hooks-run hooks-update gitleaks trivy e2e e2e-install ci-local deploy-staging deploy-prod compose-config-staging compose-config-prod
