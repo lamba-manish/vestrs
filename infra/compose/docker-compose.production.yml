@@ -75,6 +75,14 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       api: { condition: service_started }
+    # Disable the inherited Dockerfile HEALTHCHECK (which curls
+    # /healthz on :8000) — the worker has no HTTP surface. The slim
+    # Python image lacks procps so we can't use pgrep either. Crashloop
+    # detection is `restart: always` + arq's own job retry semantics;
+    # the agent + dashboard panels track per-job latency / failure
+    # rates from the job log + Redis queue depth.
+    healthcheck:
+      disable: true
 
   web-publish:
     image: ghcr.io/lamba-manish/vestrs-web:${VESTRS_TAG:-production}

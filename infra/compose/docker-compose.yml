@@ -78,6 +78,10 @@ services:
         condition: service_healthy
       api:
         condition: service_started
+    # See docker-compose.production.yml worker comment — slim Python
+    # image has no procps, no HTTP surface; rely on `restart: always`.
+    healthcheck:
+      disable: true
 
   web:
     build:
