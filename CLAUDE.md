@@ -411,9 +411,16 @@ Rules:
 - No `--no-verify`, no `--force-with-lease` to `main`/`release/*`, no
   amending merged commits.
 - Direct commits to `main` and `release/*` are blocked locally
-  (`no-commit-to-branch`) and by GitHub branch protection (slice 13+).
+  (`no-commit-to-branch`).
 - Every PR to `main` carries one slice. Cross-cutting refactors get
   their own slice + their own PR.
+
+**Server-side branch protection is currently OFF**: the repo is private
+on a free GitHub plan, which excludes both classic branch protection and
+rulesets. Enforcement today is pre-commit hooks + workflow discipline.
+Slice 13 (CI) adds required-status-checks once we either (a) make the
+repo public, (b) upgrade to GitHub Pro/Team, or (c) the user accepts
+hook-only enforcement permanently. Decision deferred to slice 13.
 
 ## 13. Quality gates (must all pass before merge)
 
