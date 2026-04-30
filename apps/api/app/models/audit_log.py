@@ -35,7 +35,9 @@ class AuditAction:
     AUTH_REFRESH = "AUTH_REFRESH"
     AUTH_REFRESH_REUSE_DETECTED = "AUTH_REFRESH_REUSE_DETECTED"
     AUTH_LOGOUT = "AUTH_LOGOUT"
-    # profile / KYC / etc lands in later slices.
+
+    # profile
+    PROFILE_UPDATED = "PROFILE_UPDATED"
 
 
 class AuditStatus:
