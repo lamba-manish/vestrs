@@ -39,6 +39,11 @@ class AuditAction:
     # profile
     PROFILE_UPDATED = "PROFILE_UPDATED"
 
+    # KYC
+    KYC_SUBMITTED = "KYC_SUBMITTED"
+    KYC_RETRY_BLOCKED = "KYC_RETRY_BLOCKED"
+    KYC_RETRY_EXHAUSTED = "KYC_RETRY_EXHAUSTED"
+
 
 class AuditStatus:
     SUCCESS = "success"

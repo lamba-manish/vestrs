@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from app.models.audit_log import AuditLog
+from app.models.kyc import KycCheck
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 
-__all__ = ["AuditLog", "RefreshToken", "User"]
+__all__ = ["AuditLog", "KycCheck", "RefreshToken", "User"]
