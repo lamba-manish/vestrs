@@ -54,7 +54,7 @@ async function request<T extends z.ZodTypeAny>(
   schema: T,
   options: RequestOptions = {},
 ): Promise<z.infer<T>> {
-  const url = `${env.NEXT_PUBLIC_API_URL}${path}`;
+  const url = `${env.API_URL}${path}`;
   const headers: Record<string, string> = {
     Accept: "application/json",
     ...options.headers,

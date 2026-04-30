@@ -1,86 +1,59 @@
 /**
- * Hand-rolled theme provider — light/dark/system, persisted to localStorage.
+ * Theme provider — light / dark, persisted to localStorage.
  *
- * We intentionally avoid `next-themes`: with Next 15 + React 19 + standalone
- * output it injects an inline script via React that trips the legacy
- * Pages Router prerender for /404 (`<Html>` import error). This module is
- * a small, dependency-free replacement.
+ * No "system" mode: the toggle is a single binary click. On first paint the
+ * inline script in index.html applies whichever class matches the stored
+ * preference (or the OS preference once, baked at first visit), so there's
+ * no flash of light theme.
  */
 
 import * as React from "react";
 
-export type ThemePreference = "light" | "dark" | "system";
-export type ResolvedTheme = "light" | "dark";
+export type Theme = "light" | "dark";
 
 const STORAGE_KEY = "vestrs:theme";
 
 interface ThemeContextValue {
-  preference: ThemePreference;
-  resolved: ResolvedTheme;
-  setPreference: (p: ThemePreference) => void;
+  theme: Theme;
+  setTheme: (t: Theme) => void;
+  toggle: () => void;
 }
 
 const ThemeContext = React.createContext<ThemeContextValue | null>(null);
 
-function readSystem(): ResolvedTheme {
+function readInitial(): Theme {
   if (typeof window === "undefined") return "dark";
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  if (stored === "light" || stored === "dark") return stored;
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-function applyClass(theme: ResolvedTheme): void {
+function applyClass(theme: Theme): void {
   const root = document.documentElement;
   root.classList.toggle("dark", theme === "dark");
   root.style.colorScheme = theme;
 }
 
-export function ThemeProvider({
-  children,
-  defaultPreference = "dark",
-}: {
-  children: React.ReactNode;
-  defaultPreference?: ThemePreference;
-}) {
-  const [preference, setPreferenceState] = React.useState<ThemePreference>(defaultPreference);
-  const [resolved, setResolved] = React.useState<ResolvedTheme>("dark");
-  const [mounted, setMounted] = React.useState(false);
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setThemeState] = React.useState<Theme>("dark");
 
-  // First-paint: read storage + apply class before reflow.
   React.useLayoutEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(STORAGE_KEY) as ThemePreference | null;
-    const initial: ThemePreference = stored ?? defaultPreference;
-    const resolvedInitial: ResolvedTheme = initial === "system" ? readSystem() : initial;
-    setPreferenceState(initial);
-    setResolved(resolvedInitial);
-    applyClass(resolvedInitial);
-    setMounted(true);
-  }, [defaultPreference]);
-
-  // Watch system changes when in "system" mode.
-  React.useEffect(() => {
-    if (!mounted || preference !== "system") return;
-    const m = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => {
-      const next: ResolvedTheme = m.matches ? "dark" : "light";
-      setResolved(next);
-      applyClass(next);
-    };
-    m.addEventListener("change", handler);
-    return () => m.removeEventListener("change", handler);
-  }, [preference, mounted]);
-
-  const setPreference = React.useCallback((p: ThemePreference) => {
-    window.localStorage.setItem(STORAGE_KEY, p);
-    const next: ResolvedTheme = p === "system" ? readSystem() : p;
-    setPreferenceState(p);
-    setResolved(next);
-    applyClass(next);
+    const initial = readInitial();
+    setThemeState(initial);
+    applyClass(initial);
   }, []);
 
-  const value = React.useMemo(
-    () => ({ preference, resolved, setPreference }),
-    [preference, resolved, setPreference],
-  );
+  const setTheme = React.useCallback((t: Theme) => {
+    window.localStorage.setItem(STORAGE_KEY, t);
+    setThemeState(t);
+    applyClass(t);
+  }, []);
+
+  const toggle = React.useCallback(() => {
+    setTheme(theme === "dark" ? "light" : "dark");
+  }, [theme, setTheme]);
+
+  const value = React.useMemo(() => ({ theme, setTheme, toggle }), [theme, setTheme, toggle]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
@@ -88,12 +61,10 @@ export function ThemeProvider({
 export function useTheme(): ThemeContextValue {
   const ctx = React.useContext(ThemeContext);
   if (!ctx) {
-    // Outside the provider (e.g., during initial server render of the 404
-    // fallback) — return a neutral default rather than throwing.
     return {
-      preference: "dark",
-      resolved: "dark",
-      setPreference: () => {},
+      theme: "dark",
+      setTheme: () => {},
+      toggle: () => {},
     };
   }
   return ctx;

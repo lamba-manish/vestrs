@@ -86,8 +86,8 @@ services:
       target: dev
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
-      NEXT_PUBLIC_APP_ENV: local
+      VITE_API_URL: http://localhost:8000
+      VITE_APP_ENV: local
     ports:
       - "3000:3000"
     volumes:
