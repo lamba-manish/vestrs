@@ -618,22 +618,33 @@ observed).
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and
   `Referrer-Policy: strict-origin-when-cross-origin` injected by Caddy.
 
-## 15. Observability
+## 15. Observability (delivered in slice 14C)
 
-- Prometheus scrapes: API (`/metrics` via `prometheus-fastapi-instrumentator`),
-  node_exporter, cAdvisor, postgres_exporter, redis_exporter, blackbox_exporter
-  for `/healthz`.
-- Grafana dashboards (provisioned as code in `infra/observability/grafana`):
-  Host (CPU/MEM/Disk/Net), Postgres, Redis, FastAPI (RPS/p50/p95/p99 by
-  route, error rate), Worker (job duration, retries, failures), Synthetic
-  uptime.
-- Alerts (Grafana → email or Slack webhook): API error rate > 5% for 5m,
-  p95 latency > 1s for 10m, host memory > 90% for 10m, disk > 80%, cert
-  expiring < 14 days, Postgres connections > 80% of max.
-- If RAM on the app box is tight, ship metrics to **Grafana Cloud free
-  tier** via `grafana-agent` instead of self-hosting Prometheus + Grafana.
-- Logs are JSON to stdout; `docker compose` ships them to journald;
-  Promtail (or Grafana Agent) forwards to Loki / Grafana Cloud Logs.
+- API exposes `/metrics` via `prometheus-fastapi-instrumentator`.
+  `/metrics` and `/healthz` are excluded from the latency histogram so
+  the per-route panels reflect real user traffic.
+- Local-dev compose profile **`observability`** (opt-in via `make obs-up`)
+  brings up Prometheus + Grafana + 5 exporters (node, cadvisor,
+  postgres, redis, blackbox) on the same compose network. Two
+  dashboards auto-provision: **Vestrs · API** + **Vestrs · Host**.
+- Production: a single **grafana-agent** container scrapes the same
+  exporters on the EC2 box and `remote_write`s to **Grafana Cloud
+  Mimir** + ships container logs to **Grafana Cloud Loki**. The agent
+  only starts when `COMPOSE_PROFILES=cloud-obs` and the
+  `GRAFANA_CLOUD_*` env vars are populated; otherwise it's out of
+  the compose graph (zero RAM overhead on the t3.small).
+- Alert rules in `infra/observability/grafana/alerts/vestrs-rules.yml`
+  load into Prometheus directly; Grafana Cloud Mimir picks them up via
+  `mimirtool rules sync` (slice 14D will wire that into CI). Coverage:
+  API 5xx > 5% / 5m, p95 > 1s / 10m, instance down 2m, synthetic
+  /healthz failing 5m, host MEM > 90% / 10m, disk > 80% / 10m,
+  Postgres connections > 80%, TLS cert < 14d.
+- Logs are JSON to stdout; docker's logging driver hands them to
+  journald; the agent's Loki source reads them via the Docker socket
+  and forwards to Cloud Loki.
+- The cloud agent is the **only** observability process that runs on
+  the production box — no self-hosted Prometheus / Grafana / Loki
+  needed (they live in Cloud).
 
 ## 16. Operating principles
 

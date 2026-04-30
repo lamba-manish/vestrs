@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.v1 import api_router
 from app.core.config import get_settings
@@ -60,6 +61,18 @@ app.add_middleware(
 
 register_exception_handlers(app)
 app.include_router(api_router)
+
+# Prometheus /metrics — exposed on the same port. Excludes the metrics
+# endpoint itself from the scrape histogram and ignores /healthz so
+# the per-route latency panels reflect real user traffic only. The
+# kill switch is `settings.enable_metrics` — defaults on; flip via the
+# ENABLE_METRICS env var in any deployment that wants /metrics hidden.
+if settings.enable_metrics:
+    Instrumentator(
+        excluded_handlers=["/metrics", "/healthz"],
+        should_group_status_codes=True,
+        should_ignore_untemplated=True,
+    ).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 
 @app.get("/healthz", tags=["meta"])
