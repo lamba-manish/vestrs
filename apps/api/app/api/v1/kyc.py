@@ -45,7 +45,7 @@ async def get_status(
     "",
     status_code=201,
     summary="Submit the first KYC check for the authenticated user",
-    dependencies=[Depends(limit(times=10, seconds=3600, bucket="kyc:submit"))],
+    dependencies=[Depends(limit(times=20, seconds=3600, bucket="kyc:submit"))],
 )
 async def submit(
     request: Request,
@@ -64,7 +64,7 @@ async def submit(
     "/retry",
     status_code=201,
     summary="Retry KYC after a failed attempt (subject to retry cap)",
-    dependencies=[Depends(limit(times=10, seconds=3600, bucket="kyc:retry"))],
+    dependencies=[Depends(limit(times=20, seconds=3600, bucket="kyc:retry"))],
 )
 async def retry(
     request: Request,

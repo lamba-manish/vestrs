@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.envelope import envelope_from_domain_error, error_envelope
-from app.core.errors import DomainError, ErrorCode, default_status_for
+from app.core.errors import DomainError, ErrorCode, RateLimitedError, default_status_for
 from app.core.logging import get_logger
 
 log = get_logger("api.errors")
@@ -42,12 +42,17 @@ def _format_pydantic_errors(
 async def domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, DomainError)
     payload = envelope_from_domain_error(exc, _request_id(request))
+    headers: dict[str, str] = {}
+    # RFC 9110 §10.2.3 — Retry-After on 429s lets clients (and Caddy /
+    # the FE toast layer) compute an honest "try again in N seconds".
+    if isinstance(exc, RateLimitedError) and exc.retry_after_seconds is not None:
+        headers["Retry-After"] = str(exc.retry_after_seconds)
     log.warning(
         "domain_error",
         code=exc.code.value,
         http_status=exc.http_status,
     )
-    return JSONResponse(payload, status_code=exc.http_status)
+    return JSONResponse(payload, status_code=exc.http_status, headers=headers)
 
 
 async def validation_error_handler(request: Request, exc: Exception) -> JSONResponse:

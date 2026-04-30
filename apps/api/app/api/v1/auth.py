@@ -33,7 +33,7 @@ def _envelope(request: Request, payload: AuthSuccess) -> dict[str, object]:
     "/signup",
     status_code=201,
     summary="Create an account and start a session",
-    dependencies=[Depends(limit(times=10, seconds=3600, bucket="auth:signup"))],
+    dependencies=[Depends(limit(times=30, seconds=3600, bucket="auth:signup"))],
 )
 async def signup(
     body: SignupRequest,
@@ -60,7 +60,7 @@ async def signup(
 @router.post(
     "/login",
     summary="Sign in with email + password",
-    dependencies=[Depends(limit(times=10, seconds=300, bucket="auth:login"))],
+    dependencies=[Depends(limit(times=30, seconds=300, bucket="auth:login"))],
 )
 async def login(
     body: LoginRequest,

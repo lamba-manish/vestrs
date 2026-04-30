@@ -133,6 +133,18 @@ class RateLimitedError(DomainError):
     code = ErrorCode.RATE_LIMITED
     default_message = "Too many requests. Please try again later."
 
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        retry_after_seconds: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        # The exception handler reads this and writes a `Retry-After`
+        # header on the 429 response (RFC 9110 §10.2.3). The FE
+        # surfaces it in the toast as "Try again in N seconds".
+        self.retry_after_seconds = retry_after_seconds
+
 
 class AuthError(DomainError):
     code = ErrorCode.AUTH_INVALID_CREDENTIALS

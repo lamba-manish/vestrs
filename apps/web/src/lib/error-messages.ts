@@ -58,8 +58,19 @@ const DEFAULT_FALLBACK = "Something went wrong. Please try again.";
 export function userMessage(error: unknown, fallback?: string): string {
   if (!error || typeof error !== "object") return fallback ?? DEFAULT_FALLBACK;
   const e = error as ApiError;
+  // Special-case 429s: when the server told us when to retry, prefer
+  // the concrete "in N seconds" copy over the generic message.
+  if (e.code === "RATE_LIMITED" && typeof e.retryAfterSeconds === "number") {
+    return `Too many requests. Try again in ${formatDuration(e.retryAfterSeconds)}.`;
+  }
   if (typeof e.code === "string" && MESSAGES[e.code]) {
     return MESSAGES[e.code];
   }
   return fallback ?? DEFAULT_FALLBACK;
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? "" : "s"}`;
+  const minutes = Math.ceil(seconds / 60);
+  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
 }
