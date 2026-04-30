@@ -11,10 +11,9 @@ import os
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, inspect, text
-
 from alembic.command import downgrade, upgrade
 from alembic.config import Config
+from sqlalchemy import create_engine, inspect, text
 
 API_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_URL = "postgresql+psycopg2://vestrs:change_me_in_local@localhost:5432/vestrs_test"
