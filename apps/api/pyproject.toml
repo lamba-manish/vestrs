@@ -12,6 +12,10 @@ dependencies = [
     "structlog>=24.4",
     "uuid6>=2024.7.10",
     "redis>=5.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "alembic>=1.14",
+    "asyncpg>=0.30",
+    "psycopg2-binary>=2.9",
 ]
 
 [dependency-groups]
