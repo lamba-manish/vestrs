@@ -1,15 +1,17 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2 } from "lucide-react";
+import { Check, Loader2, X } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { ApiError } from "@/lib/api";
 import { useSignup } from "@/lib/auth";
 import { userMessage } from "@/lib/error-messages";
-import { type SignupValues, signupSchema } from "@/lib/schemas/auth";
+import { PASSWORD_RULES, type SignupValues, signupSchema } from "@/lib/schemas/auth";
+import { cn } from "@/lib/utils";
 
 export function SignupForm() {
   const signup = useSignup();
@@ -17,8 +19,14 @@ export function SignupForm() {
     register,
     handleSubmit,
     setError,
+    watch,
     formState: { errors, isSubmitting },
-  } = useForm<SignupValues>({ resolver: zodResolver(signupSchema) });
+  } = useForm<SignupValues>({
+    resolver: zodResolver(signupSchema),
+    mode: "onChange",
+  });
+
+  const password = watch("password") ?? "";
 
   async function onSubmit(values: SignupValues) {
     try {
@@ -29,7 +37,6 @@ export function SignupForm() {
       toast.success("Account created.");
     } catch (e) {
       if (e instanceof ApiError) {
-        // Email already taken — surface on the email field.
         if (e.code === "CONFLICT") {
           setError("email", { message: "An account with this email already exists." });
           return;
@@ -68,29 +75,20 @@ export function SignupForm() {
 
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
-        <Input
+        <PasswordInput
           id="password"
-          type="password"
           autoComplete="new-password"
-          aria-describedby="password-help"
+          aria-describedby="password-checklist"
           aria-invalid={errors.password ? "true" : "false"}
           {...register("password")}
         />
-        <p id="password-help" className="text-xs text-muted-foreground">
-          12 characters minimum. Use a passphrase you&apos;ll remember.
-        </p>
-        {errors.password && (
-          <p role="alert" className="text-xs text-destructive">
-            {errors.password.message}
-          </p>
-        )}
+        <PasswordChecklist value={password} />
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="confirm_password">Confirm password</Label>
-        <Input
+        <PasswordInput
           id="confirm_password"
-          type="password"
           autoComplete="new-password"
           aria-invalid={errors.confirm_password ? "true" : "false"}
           {...register("confirm_password")}
@@ -107,5 +105,35 @@ export function SignupForm() {
         Open account
       </Button>
     </form>
+  );
+}
+
+function PasswordChecklist({ value }: { value: string }) {
+  return (
+    <ul
+      id="password-checklist"
+      className="grid gap-1 pt-1 text-xs sm:grid-cols-2"
+      aria-label="Password requirements"
+    >
+      {PASSWORD_RULES.map((rule) => {
+        const ok = value.length > 0 && rule.test(value);
+        return (
+          <li
+            key={rule.id}
+            className={cn(
+              "inline-flex items-center gap-1.5 transition-colors",
+              ok ? "text-success" : "text-muted-foreground",
+            )}
+          >
+            {ok ? (
+              <Check className="size-3.5" aria-hidden="true" />
+            ) : (
+              <X className="size-3.5 opacity-50" aria-hidden="true" />
+            )}
+            <span>{rule.label}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

@@ -1,4 +1,18 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
+
+/**
+ * Open a Combobox by its label, search for a substring, and click
+ * the first matching option. Used by the profile + bank forms where
+ * country / currency / account-type pickers are searchable dropdowns
+ * (slice 20).
+ */
+async function selectCombobox(page: Page, label: RegExp | string, search: string) {
+  await page.getByLabel(label).first().click();
+  // The popover renders a Command input; type to filter.
+  await page.getByRole("combobox").first(); // ensure the trigger has rendered
+  await page.locator("[cmdk-input]").fill(search);
+  await page.getByRole("option").filter({ hasText: search }).first().click();
+}
 
 /**
  * Canonical happy-path: signup → profile → KYC → accreditation
@@ -8,7 +22,9 @@ import { expect, test } from "@playwright/test";
  * spec is replayable without cleanup.
  */
 
-const PASSWORD = "correcthorsebatterystaple9";
+// Password must satisfy the strong-password schema: 12+ chars,
+// lowercase, uppercase, digit, symbol.
+const PASSWORD = "Correct-Horse-Battery-9!";
 
 function freshEmail(): string {
   const stamp = Date.now().toString(36);
@@ -32,9 +48,11 @@ test("happy path — onboard a new investor end-to-end", async ({ page }) => {
   await page.getByRole("link", { name: /start/i }).first().click();
   await expect(page).toHaveURL(/\/onboarding\/profile$/);
   await page.getByLabel(/full name/i).fill("Eve E2E");
-  await page.getByLabel(/^phone/i).fill("+14155551234");
-  await page.getByLabel(/nationality/i).fill("US");
-  await page.getByLabel(/country of residence/i).fill("US");
+  await selectCombobox(page, /nationality/i, "United States");
+  await selectCombobox(page, /country of residence/i, "United States");
+  // Phone is split: dial-code combobox + national-number input.
+  await selectCombobox(page, /phone/i, "United States");
+  await page.getByPlaceholder(/9876543210/).fill("4155551234");
   await page.getByRole("button", { name: /save profile/i }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
@@ -65,7 +83,10 @@ test("happy path — onboard a new investor end-to-end", async ({ page }) => {
   await page.getByLabel(/account holder name/i).fill("Eve E2E");
   await page.getByLabel(/^account number/i).fill("123456789");
   await page.getByLabel(/routing number/i).fill("110000000");
-  await page.getByLabel(/currency/i).fill("USD");
+  // Currency + account_type are now Comboboxes (slice 20). Both default
+  // to USD / Checking already, but exercise the picker on currency to
+  // catch regressions.
+  await selectCombobox(page, /currency/i, "USD");
   await page.getByRole("button", { name: /link bank/i }).click();
   await expect(page.getByText(/bank account linked/i)).toBeVisible({
     timeout: 15_000,

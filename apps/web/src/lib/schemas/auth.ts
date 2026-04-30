@@ -5,10 +5,37 @@
 
 import { z } from "zod";
 
+export const PASSWORD_RULES = [
+  { id: "len", label: "12+ characters", test: (p: string) => p.length >= 12 },
+  { id: "lower", label: "Lowercase letter", test: (p: string) => /[a-z]/.test(p) },
+  { id: "upper", label: "Uppercase letter", test: (p: string) => /[A-Z]/.test(p) },
+  { id: "digit", label: "Digit", test: (p: string) => /\d/.test(p) },
+  {
+    id: "symbol",
+    label: "Symbol",
+    test: (p: string) => /[^A-Za-z0-9]/.test(p),
+  },
+] as const;
+
+const strongPassword = z
+  .string()
+  .max(128, "Maximum 128 characters.")
+  .superRefine((value, ctx) => {
+    for (const rule of PASSWORD_RULES) {
+      if (!rule.test(value)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Missing: ${rule.label.toLowerCase()}.`,
+        });
+        return;
+      }
+    }
+  });
+
 export const signupSchema = z
   .object({
     email: z.string().email("Enter a valid email address."),
-    password: z.string().min(12, "Use at least 12 characters.").max(128, "Maximum 128 characters."),
+    password: strongPassword,
     confirm_password: z.string(),
   })
   .refine((v) => v.password === v.confirm_password, {

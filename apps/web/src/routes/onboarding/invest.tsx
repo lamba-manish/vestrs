@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { useBankSummary } from "@/lib/bank";
+import { findCurrency } from "@/lib/currencies";
 import { userMessage } from "@/lib/error-messages";
 import { useCreateInvestment, useInvestments } from "@/lib/investments";
 import {
@@ -151,7 +152,10 @@ function InvestContent() {
         <CardContent className="space-y-6">
           <div className="rounded-md border border-border bg-card/40 p-4">
             <dl className="grid grid-cols-2 gap-4 text-sm">
-              <Pair k="Available balance" v={`${account.currency} ${account.mock_balance}`} />
+              <Pair
+                k="Available balance"
+                v={formatBalance(account.currency, account.mock_balance)}
+              />
               <Pair k="Currency" v={account.currency} />
             </dl>
           </div>
@@ -255,6 +259,12 @@ function Pair({ k, v }: { k: string; v: string }) {
       <dd className="mt-0.5 font-medium">{v}</dd>
     </div>
   );
+}
+
+function formatBalance(code: string, amount: string): string {
+  const currency = findCurrency(code);
+  if (currency) return `${currency.symbol}${amount} ${currency.code}`;
+  return `${code} ${amount}`;
 }
 
 function DemoHints() {

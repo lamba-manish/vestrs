@@ -15,7 +15,7 @@ import { expect, test } from "@playwright/test";
  * comes from the vendor and the FE just renders it.
  */
 
-const PASSWORD = "correcthorsebatterystaple9";
+const PASSWORD = "Correct-Horse-Battery-9!";
 
 function failingEmail(): string {
   const stamp = Date.now().toString(36);
@@ -32,12 +32,19 @@ test("kyc fail → renders reason + retry CTA", async ({ page }) => {
   await page.getByRole("button", { name: /open account|sign up|create/i }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
-  // profile prerequisite
+  // profile prerequisite — slice 20 made these Comboboxes
   await page.getByRole("link", { name: /start/i }).first().click();
   await page.getByLabel(/full name/i).fill("Faye Failsfirst");
-  await page.getByLabel(/^phone/i).fill("+14155551234");
-  await page.getByLabel(/nationality/i).fill("US");
-  await page.getByLabel(/country of residence/i).fill("US");
+  for (const [label, search] of [
+    [/nationality/i, "United States"],
+    [/country of residence/i, "United States"],
+    [/phone/i, "United States"],
+  ] as const) {
+    await page.getByLabel(label).first().click();
+    await page.locator("[cmdk-input]").fill(search);
+    await page.getByRole("option").filter({ hasText: search }).first().click();
+  }
+  await page.getByPlaceholder(/9876543210/).fill("4155551234");
   await page.getByRole("button", { name: /save profile/i }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
