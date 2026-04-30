@@ -56,6 +56,60 @@ make e2e               # run Playwright
 Reports land at `apps/web/playwright-report/` and traces at
 `apps/web/test-results/`.
 
+## Observability (slice 14C)
+
+### Locally
+```bash
+make obs-up      # brings up prometheus + grafana + 5 exporters
+# Grafana → http://localhost:3001  (admin / admin)
+# Prom    → http://localhost:9090
+make obs-down    # stops them; data persists in named volumes
+```
+
+Two dashboards auto-provision: **Vestrs · API** (RPS, error rate,
+p50/p95/p99 by route, FD count, synthetic uptime) and **Vestrs · Host**
+(CPU, MEM, Disk, Net, container RSS, Postgres connections). Alert
+rules in `infra/observability/grafana/alerts/vestrs-rules.yml` load
+into Prometheus immediately; Grafana Cloud Mimir picks them up via
+`mimirtool rules sync` (slice 14D wires that into CI).
+
+### In staging / production
+
+`infra/compose/docker-compose.{staging,prod}.yml` includes the same
+exporters plus a `grafana-agent` service that scrapes them and
+`remote_write`s metrics + ships container logs to Grafana Cloud.
+
+The agent only starts when explicitly enabled via the `cloud-obs`
+compose profile. To turn it on:
+
+1. **Provision a Grafana Cloud free stack** (https://grafana.com →
+   *Create stack*). Note the Mimir URL + username and the Loki URL +
+   username.
+2. **Mint an access policy token** with `metrics:write` + `logs:write`
+   scopes on that stack.
+3. **Stash the secrets in SSM Parameter Store**:
+   ```bash
+   ENV=staging
+   for k in PROM_URL PROM_USER LOKI_URL LOKI_USER API_KEY; do
+     aws ssm put-parameter --type SecureString \
+       --name "/vestrs/$ENV/grafana_cloud_$(echo $k | tr A-Z a-z)" \
+       --value '<paste>'
+   done
+   ```
+4. **Update `.env.<env>`** (the SSM-stored copy) so cloud-init renders:
+   ```
+   COMPOSE_PROFILES=cloud-obs
+   GRAFANA_CLOUD_PROM_URL=...
+   GRAFANA_CLOUD_PROM_USER=...
+   GRAFANA_CLOUD_LOKI_URL=...
+   GRAFANA_CLOUD_LOKI_USER=...
+   GRAFANA_CLOUD_API_KEY=...
+   ```
+5. `git push <sha>:release/<env>` — next deploy starts the agent.
+
+Without those env vars set, the `grafana-agent` service stays out of
+the compose graph entirely (zero overhead).
+
 ## Bootstrap from zero (slice 14B)
 
 The whole production stack — VPC, EC2, EIP, Route53 records, IAM

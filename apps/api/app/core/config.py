@@ -45,6 +45,13 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # ---- observability ----
+    # Toggles the /metrics endpoint exposed by prometheus-fastapi-instrumentator.
+    # Defaults on; set ENABLE_METRICS=false in any env where the endpoint
+    # should be hidden (e.g. an internal-only deployment behind a different
+    # scrape strategy).
+    enable_metrics: bool = True
+
     # ---- auth ----
     jwt_secret: str = "change_me_in_local_only_must_override_in_envs"  # noqa: S105
     jwt_algorithm: str = "HS256"

@@ -22,6 +22,7 @@ dependencies = [
     "phonenumbers>=8.13",
     "pycountry>=24.6",
     "arq>=0.26",
+    "prometheus-fastapi-instrumentator>=7.0",
 ]
 
 [dependency-groups]

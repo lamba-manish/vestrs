@@ -1,0 +1,107 @@
+// Grafana Agent (Flow / "river" syntax) — runs on each EC2 host and
+// ships metrics + logs to Grafana Cloud.
+//
+// Why a single river config? It scrapes the same exporters our local
+// Prometheus does, then `prometheus.remote_write`s them to Cloud
+// Mimir. Container logs are slurped from Docker's API and shipped to
+// Cloud Loki. No on-box Prometheus / Loki — the agent is the only
+// observability process the t3.small has to run.
+//
+// All credentials come from environment variables that compose
+// resolves at start-time:
+//   GRAFANA_CLOUD_PROM_URL    — https://prometheus-prod-XX.grafana.net/api/prom/push
+//   GRAFANA_CLOUD_PROM_USER   — numeric instance id
+//   GRAFANA_CLOUD_LOKI_URL    — https://logs-prod-XXX.grafana.net/loki/api/v1/push
+//   GRAFANA_CLOUD_LOKI_USER   — numeric instance id
+//   GRAFANA_CLOUD_API_KEY     — Grafana Cloud access policy token (read+write metrics+logs)
+//   ENV                       — staging | production (added as a label on every series)
+
+logging {
+	level  = "info"
+	format = "logfmt"
+}
+
+// ---------- targets we scrape on the box ----------
+
+prometheus.scrape "api" {
+	targets = [
+		{ "__address__" = "api:8000",                 job = "api" },
+		{ "__address__" = "node-exporter:9100",       job = "node" },
+		{ "__address__" = "cadvisor:8080",            job = "cadvisor" },
+		{ "__address__" = "postgres-exporter:9187",   job = "postgres" },
+		{ "__address__" = "redis-exporter:9121",      job = "redis" },
+	]
+	scrape_interval = "15s"
+	forward_to      = [prometheus.remote_write.cloud.receiver]
+}
+
+prometheus.scrape "blackbox_self" {
+	targets = [
+		{
+			"__address__"     = "blackbox-exporter:9115",
+			"__metrics_path__" = "/probe",
+			"__param_module"  = "http_2xx",
+			"__param_target"  = "http://api:8000/healthz",
+			job               = "blackbox-http",
+			instance          = "api/healthz",
+		},
+	]
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.cloud.receiver]
+}
+
+// ---------- metrics → Grafana Cloud ----------
+
+prometheus.remote_write "cloud" {
+	endpoint {
+		url = sys.env("GRAFANA_CLOUD_PROM_URL")
+		basic_auth {
+			username = sys.env("GRAFANA_CLOUD_PROM_USER")
+			password = sys.env("GRAFANA_CLOUD_API_KEY")
+		}
+	}
+	external_labels = {
+		env     = sys.env("ENV"),
+		project = "vestrs",
+	}
+}
+
+// ---------- logs → Grafana Cloud Loki ----------
+
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+loki.source.docker "containers" {
+	host          = "unix:///var/run/docker.sock"
+	targets       = discovery.docker.containers.targets
+	relabel_rules = loki.relabel.containers.rules
+	forward_to    = [loki.write.cloud.receiver]
+}
+
+loki.relabel "containers" {
+	forward_to = []
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/?(.*)"
+		target_label  = "container"
+	}
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service"
+	}
+}
+
+loki.write "cloud" {
+	endpoint {
+		url = sys.env("GRAFANA_CLOUD_LOKI_URL")
+		basic_auth {
+			username = sys.env("GRAFANA_CLOUD_LOKI_USER")
+			password = sys.env("GRAFANA_CLOUD_API_KEY")
+		}
+	}
+	external_labels = {
+		env     = sys.env("ENV"),
+		project = "vestrs",
+	}
+}

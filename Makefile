@@ -80,6 +80,23 @@ trivy: ## scan built api+web images locally (HIGH+CRITICAL fail)
 	    --ignorefile /work/.trivyignore --exit-code 1 $$img || exit 1; \
 	done
 
+# ---------- observability (slice 14C) ----------
+
+obs-up: ## bring up local Prometheus + Grafana + exporters (compose profile)
+	$(COMPOSE) --profile observability up -d
+	@echo
+	@echo "  Prometheus  → http://localhost:9090"
+	@echo "  Grafana     → http://localhost:3001  (admin / admin)"
+	@echo "  cAdvisor    → http://localhost:8080  (port-forwarded by compose)"
+
+obs-down: ## stop the observability profile services only
+	$(COMPOSE) --profile observability stop \
+	  prometheus grafana node-exporter cadvisor postgres-exporter redis-exporter blackbox-exporter
+
+obs-logs: ## tail observability logs
+	$(COMPOSE) --profile observability logs -f --tail=100 \
+	  prometheus grafana node-exporter cadvisor postgres-exporter redis-exporter blackbox-exporter
+
 # ---------- release / deploy (slice 14A) ----------
 
 deploy-staging: ## run deploy.sh against staging (must be on target host)
@@ -119,4 +136,4 @@ ci-local: ## run the full CI matrix locally (lint+types+tests+build, BE+FE)
 	$(MAKE) gitleaks
 	@echo "ci-local: all gates passed"
 
-.PHONY: help bootstrap up down restart logs ps api-shell web-shell api-test api-lint web-test web-lint clean hooks-install hooks-run hooks-update gitleaks trivy e2e e2e-install ci-local deploy-staging deploy-prod compose-config-staging compose-config-prod
+.PHONY: help bootstrap up down restart logs ps api-shell web-shell api-test api-lint web-test web-lint clean hooks-install hooks-run hooks-update gitleaks trivy e2e e2e-install ci-local deploy-staging deploy-prod compose-config-staging compose-config-prod obs-up obs-down obs-logs

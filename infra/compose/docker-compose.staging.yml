@@ -118,9 +118,89 @@ services:
       timeout: 3s
       retries: 3
 
+  # ---------- observability ----------
+  # Exporters always run; the cloud agent runs only when
+  # GRAFANA_CLOUD_API_KEY is non-empty (set in .env.staging from SSM).
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    restart: always
+    pid: host
+    network_mode: host
+    command:
+      - --path.rootfs=/host
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+      - --web.listen-address=:9100
+    volumes:
+      - /:/host:ro,rslave
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    restart: always
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    restart: always
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.66.0-alpine
+    restart: always
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      redis: { condition: service_healthy }
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    restart: always
+    volumes:
+      - ../observability/exporters/blackbox/blackbox.yml:/config/blackbox.yml:ro
+    command: --config.file=/config/blackbox.yml
+
+  grafana-agent:
+    image: grafana/agent:v0.43.4
+    restart: always
+    volumes:
+      - ../observability/agent/agent.river:/etc/agent/agent.river:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - agent-data:/var/lib/agent
+    command:
+      - run
+      - /etc/agent/agent.river
+      - --storage.path=/var/lib/agent
+      - --server.http.listen-addr=0.0.0.0:12345
+    environment:
+      ENV: staging
+      GRAFANA_CLOUD_PROM_URL:  ${GRAFANA_CLOUD_PROM_URL:-}
+      GRAFANA_CLOUD_PROM_USER: ${GRAFANA_CLOUD_PROM_USER:-}
+      GRAFANA_CLOUD_LOKI_URL:  ${GRAFANA_CLOUD_LOKI_URL:-}
+      GRAFANA_CLOUD_LOKI_USER: ${GRAFANA_CLOUD_LOKI_USER:-}
+      GRAFANA_CLOUD_API_KEY:   ${GRAFANA_CLOUD_API_KEY:-}
+    profiles:
+      # The agent only starts when explicitly enabled via the
+      # `cloud-obs` profile. .env.staging sets COMPOSE_PROFILES so
+      # `docker compose up` picks it up automatically once the
+      # GRAFANA_CLOUD_* secrets are populated; without them, the
+      # profile stays opt-in and the agent doesn't run.
+      - cloud-obs
+
 volumes:
   postgres-data:
   redis-data:
   caddy-data:
   caddy-config:
   web-dist:
+  agent-data:

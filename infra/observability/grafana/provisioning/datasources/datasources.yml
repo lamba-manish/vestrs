@@ -1,0 +1,21 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+
+  # Loki is configured but unused in local mode (no Loki container in
+  # the dev profile). Kept here so dashboards that include log panels
+  # don't break when imported in environments where Loki is wired up
+  # via grafana-agent → Grafana Cloud Logs.
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    jsonData:
+      timeout: 10
