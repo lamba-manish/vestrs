@@ -13,10 +13,8 @@
 import type { ApiError } from "@/lib/api";
 
 const MESSAGES: Record<string, string> = {
-  // auth
-  AUTH_EMAIL_NOT_FOUND: "We couldn't find an account with that email.",
-  AUTH_PASSWORD_INCORRECT: "That password doesn't match. Please try again.",
-  AUTH_INVALID_CREDENTIALS: "Email or password is incorrect.",
+  // auth — single vague code on bad-creds is intentional (CLAUDE.md sec.8)
+  AUTH_INVALID_CREDENTIALS: "Invalid email or password.",
   AUTH_TOKEN_EXPIRED: "Your session has expired. Please sign in again.",
   AUTH_TOKEN_INVALID: "Please sign in to continue.",
   AUTH_REFRESH_REQUIRED: "Your session has expired. Please sign in again.",

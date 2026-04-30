@@ -26,13 +26,10 @@ export function LoginForm() {
       toast.success("Welcome back.");
     } catch (e) {
       if (e instanceof ApiError) {
-        // For login errors, attach the message to the relevant field rather
-        // than a toast — far less noisy and points the user at what to fix.
-        if (e.code === "AUTH_EMAIL_NOT_FOUND") {
-          setError("email", { message: userMessage(e) });
-          return;
-        }
-        if (e.code === "AUTH_PASSWORD_INCORRECT") {
+        // Vague-by-design: same message for unknown-email and wrong-password.
+        // Surface on the password field — same copy either way, so no
+        // enumeration risk.
+        if (e.code === "AUTH_INVALID_CREDENTIALS") {
           setError("password", { message: userMessage(e) });
           return;
         }
