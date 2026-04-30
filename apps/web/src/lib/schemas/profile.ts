@@ -37,7 +37,26 @@ export const profileFormSchema = z.object({
   phone_number: z
     .string()
     .trim()
-    .regex(/^\d[\d\s-]{5,18}\d$/, "Digits only — no country code."),
+    .superRefine((value, ctx) => {
+      if (value.length === 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Required." });
+        return;
+      }
+      if (!/^[\d\s-]+$/.test(value)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Digits only (spaces and dashes are fine).",
+        });
+        return;
+      }
+      const digits = value.replaceAll(/\D/g, "");
+      if (digits.length < 6 || digits.length > 15) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Use 6-15 digits — no country code.",
+        });
+      }
+    }),
 });
 
 export type ProfileFormValues = z.infer<typeof profileFormSchema>;

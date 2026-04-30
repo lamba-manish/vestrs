@@ -11,7 +11,6 @@ import { ApiError } from "@/lib/api";
 import { useSignup } from "@/lib/auth";
 import { userMessage } from "@/lib/error-messages";
 import { PASSWORD_RULES, type SignupValues, signupSchema } from "@/lib/schemas/auth";
-import { cn } from "@/lib/utils";
 
 export function SignupForm() {
   const signup = useSignup();
@@ -109,31 +108,41 @@ export function SignupForm() {
 }
 
 function PasswordChecklist({ value }: { value: string }) {
+  // Surface only the next failing rule, in priority order. Once one
+  // rule passes the next slides in. When everything's green, show a
+  // single confirmation. This keeps the form's signal tight —
+  // five red Xs side-by-side is louder than the form is trying to be.
+  const nextFailing = PASSWORD_RULES.find((rule) => !rule.test(value));
+
+  if (value.length === 0) {
+    return (
+      <p id="password-checklist" className="pt-1 text-xs text-muted-foreground">
+        12+ characters, with a lowercase, uppercase, digit, and symbol.
+      </p>
+    );
+  }
+
+  if (!nextFailing) {
+    return (
+      <p
+        id="password-checklist"
+        className="inline-flex items-center gap-1.5 pt-1 text-xs text-success"
+      >
+        <Check className="size-3.5" aria-hidden="true" />
+        Strong password.
+      </p>
+    );
+  }
+
   return (
-    <ul
+    <p
       id="password-checklist"
-      className="grid gap-1 pt-1 text-xs sm:grid-cols-2"
-      aria-label="Password requirements"
+      role="status"
+      aria-live="polite"
+      className="inline-flex items-center gap-1.5 pt-1 text-xs text-muted-foreground"
     >
-      {PASSWORD_RULES.map((rule) => {
-        const ok = value.length > 0 && rule.test(value);
-        return (
-          <li
-            key={rule.id}
-            className={cn(
-              "inline-flex items-center gap-1.5 transition-colors",
-              ok ? "text-success" : "text-muted-foreground",
-            )}
-          >
-            {ok ? (
-              <Check className="size-3.5" aria-hidden="true" />
-            ) : (
-              <X className="size-3.5 opacity-50" aria-hidden="true" />
-            )}
-            <span>{rule.label}</span>
-          </li>
-        );
-      })}
-    </ul>
+      <X className="size-3.5 text-destructive" aria-hidden="true" />
+      <span>{nextFailing.nudge}</span>
+    </p>
   );
 }

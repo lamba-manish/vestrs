@@ -88,7 +88,12 @@ export const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled='true']:pointer-events-none data-[disabled='true']:opacity-50",
+      // cmdk sets aria-selected on the keyboard/mouse-highlighted row.
+      // We use a muted bg + explicit foreground (instead of the
+      // green-tinted accent token, which faded the country name into
+      // the highlight) so text contrast stays AA. The chosen value is
+      // signalled separately by the leading check icon.
+      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm text-foreground outline-none aria-selected:bg-secondary/70 aria-selected:text-foreground data-[disabled='true']:pointer-events-none data-[disabled='true']:opacity-50",
       className,
     )}
     {...props}
