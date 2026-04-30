@@ -38,7 +38,9 @@ Four workflows guard `main`:
   allowlist. Re-runs weekly so new CVEs surface even in unchanged
   base images.
 - **SonarCloud** (`sonarcloud.yml`) — coverage + quality-gate
-  decoration on PRs. Requires the `SONAR_TOKEN` repo secret.
+  decoration on PRs. Requires the `SONAR_TOKEN` repo secret AND the
+  repository variable `SONAR_ENABLED=true`. The job skips cleanly
+  while either is missing so PRs aren't blocked during setup.
 
 Reproduce CI locally with `make ci-local` (runs the same lint, types,
 tests, and gitleaks gates inside the dev container).
