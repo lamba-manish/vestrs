@@ -1,0 +1,155 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - release/staging
+      - release/production
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Target environment"
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+
+concurrency:
+  # One release at a time per env; cancel an older queued run if a newer
+  # commit lands on the same release branch.
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  # Trivy SARIF
+  security-events: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  resolve-env:
+    name: resolve · target environment
+    runs-on: ubuntu-24.04
+    outputs:
+      target: ${{ steps.pick.outputs.target }}
+    steps:
+      - id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "target=${{ inputs.env }}" >> "$GITHUB_OUTPUT"
+          else
+            case "${{ github.ref }}" in
+              refs/heads/release/staging)    echo "target=staging"    >> "$GITHUB_OUTPUT" ;;
+              refs/heads/release/production) echo "target=production" >> "$GITHUB_OUTPUT" ;;
+              *)
+                echo "::error::Unexpected ref ${{ github.ref }}"
+                exit 1
+                ;;
+            esac
+          fi
+
+  build-and-push:
+    name: build+push · ${{ matrix.image.name }}
+    runs-on: ubuntu-24.04
+    needs: resolve-env
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          # The worker is the same image as the api with a different
+          # entrypoint — compose overrides it at runtime, so we don't
+          # publish a separate vestrs-worker image.
+          - { name: api, context: apps/api, target: runtime }
+          - { name: web, context: apps/web, target: builder }
+    env:
+      TARGET: ${{ needs.resolve-env.outputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          base="${IMAGE_NAMESPACE}/vestrs-${{ matrix.image.name }}"
+          sha="${GITHUB_SHA}"
+          short="$(echo "$sha" | cut -c1-7)"
+          floating="${TARGET}"
+          {
+            echo "primary=${base}:${sha}"
+            echo "short=${base}:sha-${short}"
+            echo "floating=${base}:${floating}"
+            echo "all=${base}:${sha},${base}:sha-${short},${base}:${floating}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build (load locally for scan)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.image.context }}
+          target: ${{ matrix.image.target }}
+          push: false
+          load: true
+          tags: ${{ steps.tags.outputs.primary }}
+          cache-from: type=gha,scope=release-${{ matrix.image.name }}
+          cache-to: type=gha,scope=release-${{ matrix.image.name }},mode=max
+
+      # Re-scan at release time. CI on the source PR has already
+      # scanned the same images, but base-image CVEs can land between
+      # PR merge and release; this gate is what publishes to the world.
+      - name: Trivy scan (HIGH+CRITICAL fail)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.tags.outputs.primary }}
+          format: table
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: ./.trivyignore
+          scanners: vuln
+
+      - name: Push (all tags)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.image.context }}
+          target: ${{ matrix.image.target }}
+          push: true
+          tags: ${{ steps.tags.outputs.all }}
+          cache-from: type=gha,scope=release-${{ matrix.image.name }}
+          # No cache-to here — already populated by the scan-build step.
+          provenance: false
+
+  release-summary:
+    name: summary
+    runs-on: ubuntu-24.04
+    needs: [resolve-env, build-and-push]
+    if: always()
+    steps:
+      - name: Render summary
+        env:
+          TARGET: ${{ needs.resolve-env.outputs.target }}
+          SHA: ${{ github.sha }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          # Release · ${TARGET}
+
+          Commit: \`${SHA}\`
+
+          Published images:
+          - \`ghcr.io/${{ github.repository_owner }}/vestrs-api:${TARGET}\`  (also used as the worker)
+          - \`ghcr.io/${{ github.repository_owner }}/vestrs-web:${TARGET}\`
+
+          Each is also tagged with the full SHA and \`sha-$(echo ${SHA} | cut -c1-7)\`.
+
+          Next: \`bash infra/scripts/deploy.sh ${TARGET}\` on the target host.
+          EOF

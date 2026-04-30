@@ -1,0 +1,104 @@
+# Caddy config — staging.
+#
+# Two virtual hosts:
+#   staging.vestrs.manishlamba.com       → static SPA from /srv/web
+#   staging-api.vestrs.manishlamba.com   → reverse-proxy to api:8000
+#
+# TLS via Let's Encrypt staging-API uses the same ACME issuer.
+# {$ACME_EMAIL} is provided by docker-compose env.
+
+{
+	email {$ACME_EMAIL}
+	# Tighter timeouts for production-grade behaviour.
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+# ----------------------------------------------------------------------
+#   Frontend  ·  https://staging.vestrs.manishlamba.com
+# ----------------------------------------------------------------------
+staging.vestrs.manishlamba.com {
+	encode zstd gzip
+
+	root * /srv/web
+	file_server
+
+	# SPA fallback — anything that's not a real file resolves to /index.html
+	# so client-side routing works (e.g. /onboarding/profile on hard refresh).
+	@notfile {
+		not file
+		not path /assets/*
+	}
+	rewrite @notfile /index.html
+
+	# Long-cache hashed assets, no-cache for the index shell.
+	@assets {
+		path /assets/*
+	}
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	header / Cache-Control "no-cache"
+
+	# Security headers — same set across both vhosts.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), camera=(), microphone=(), interest-cohort=()"
+		# Adjust CSP if you add third-party scripts/fonts. Inter + Fraunces
+		# are bundled, so font-src is self-only.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self' https://staging-api.vestrs.manishlamba.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		# Hide the server header to reduce fingerprinting noise.
+		-Server
+	}
+
+	# Cheap healthz so the upstream LB / runbook can probe without 404 noise.
+	respond /healthz "ok" 200
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# ----------------------------------------------------------------------
+#   API  ·  https://staging-api.vestrs.manishlamba.com
+# ----------------------------------------------------------------------
+staging-api.vestrs.manishlamba.com {
+	encode zstd gzip
+
+	# Reverse proxy — preserve the original host so the API's
+	# trusted-host middleware can authorise it.
+	reverse_proxy api:8000 {
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto https
+		# Stricter timeouts than Caddy default to surface upstream
+		# slowness as 504 instead of hanging.
+		transport http {
+			dial_timeout 5s
+			read_timeout 60s
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# Aggregate root health — Caddy itself, not the upstream. Used by the
+# compose healthcheck on this container.
+:80 {
+	respond /healthz "ok" 200
+}

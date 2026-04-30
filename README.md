@@ -56,6 +56,46 @@ make e2e               # run Playwright
 Reports land at `apps/web/playwright-report/` and traces at
 `apps/web/test-results/`.
 
+## Releases
+
+Pushing to `release/staging` or `release/production` triggers
+`.github/workflows/release.yml`, which:
+
+1. Builds api + web images.
+2. Re-runs Trivy (HIGH+CRITICAL fail) against the freshly built api
+   image — same gate as PR CI, repeated at release time so a CVE that
+   landed between merge and release blocks the publish.
+3. Pushes to GHCR with three tags each:
+   - `ghcr.io/lamba-manish/vestrs-{api,web}:<full-sha>` (immutable)
+   - `:sha-<7char>` (immutable, short)
+   - `:staging` or `:production` (floating; latest publish on that branch)
+
+Promote staging → production by pushing the verified staging SHA to
+`release/production`:
+
+```bash
+git push origin <verified-sha>:release/production
+```
+
+Roll back without retagging:
+
+```bash
+VESTRS_TAG=sha-abc1234 bash infra/scripts/deploy.sh production
+```
+
+### Deploying
+
+`infra/scripts/deploy.sh <staging|production>` runs **on the target
+host** (slice 14A — slice 14B will trigger this remotely from CI via
+SSM). It pulls the latest images, runs `docker compose up -d --wait`,
+and smoke-tests `https://<api-host>/healthz`. The api container's
+entrypoint runs `alembic upgrade head` on every start, so migrations
+apply automatically.
+
+The `.env.<env>` file must already be populated from AWS SSM
+Parameter Store before invoking `deploy.sh`. The script refuses to
+proceed without it.
+
 ### Reading a red Trivy job
 
 Trivy fails the build on any HIGH or CRITICAL CVE with a fix

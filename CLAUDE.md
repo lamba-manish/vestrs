@@ -543,10 +543,23 @@ CI (GitHub Actions, on every PR — workflows under `.github/workflows/`):
 
 `sonarcloud.yml`:
 10. `sonar`          — coverage + quality-gate decoration on PRs
-    (skipped on forks; `SONAR_TOKEN` repo secret).
+    (skipped on forks and when `vars.SONAR_ENABLED != 'true'`; needs
+    `SONAR_TOKEN` repo secret + `SONAR_ENABLED=true` repo variable).
+
+`release.yml` (slice 14A — fires on push to `release/staging` /
+`release/production`):
+11. `build-and-push` — build api + web images, **re-run Trivy** on
+    the freshly built api image as the final pre-publish gate, then
+    push to GHCR with three tags each: full SHA, `sha-<7char>`, and
+    the floating `:staging` / `:production` tag. Workers reuse the
+    api image with a different entrypoint at compose-time, so we
+    publish only `vestrs-api` and `vestrs-web`.
 
 Merge to `main` is blocked unless all required jobs are green AND at
-least one human reviewer has approved.
+least one human reviewer has approved. Required status checks on
+`main` as of slice 13: the 10 jobs in `ci.yml` / `e2e.yml` /
+`security.yml` (sonarcloud is held out until first green run is
+observed).
 
 ## 14. Infrastructure & deploy
 
@@ -567,10 +580,16 @@ least one human reviewer has approved.
   via **AWS SSM Session Manager only** (no public SSH, no key on the box,
   no port 22 in the security group). Audit trail is captured by SSM
   session logging to CloudWatch.
-- Deployment is **pull-based**: deploy script SSHs to the box, runs
-  `git pull`, `docker compose pull`, `docker compose up -d`,
-  `alembic upgrade head`, smoke-tests `/healthz`. Same script per env, env
-  selected by argument.
+- Deployment is **pull-based**: `infra/scripts/deploy.sh <env>` runs
+  on the target host, `docker compose pull`, `docker compose up -d
+  --wait`, smoke-tests `https://<api-host>/healthz`. Slice 14B will
+  add the SSM-triggered remote runner that calls this script from
+  GitHub Actions on a tag promotion.
+- Images come from **GHCR**: `ghcr.io/lamba-manish/vestrs-{api,web}`
+  with floating `:staging` / `:production` tags plus per-SHA
+  immutable tags for rollback (`VESTRS_TAG=sha-abc1234 deploy.sh
+  production`). The api image is reused as the worker (compose
+  overrides the entrypoint to `arq`).
 - **Alembic runs at API container startup in every environment** (entrypoint
   script). No env-specific schemas, no manual migration steps.
 - Nightly `pg_dump` to S3 from a cron container; weekly restore drill into

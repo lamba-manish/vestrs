@@ -1,0 +1,126 @@
+# Staging stack — pulls pre-built images from GHCR.
+#
+# Usage on the EC2 host:
+#   export VESTRS_TAG=staging
+#   docker compose -f infra/compose/docker-compose.staging.yml --env-file .env.staging pull
+#   docker compose -f infra/compose/docker-compose.staging.yml --env-file .env.staging up -d
+#
+# Only Caddy publishes ports (80, 443). Postgres + Redis are reachable
+# only on the internal compose network.
+
+name: vestrs-staging
+
+x-image-tag: &image-tag ${VESTRS_TAG:-staging}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api:
+    image: ghcr.io/lamba-manish/vestrs-api:${VESTRS_TAG:-staging}
+    restart: always
+    environment:
+      APP_ENV: staging
+      API_HOST: 0.0.0.0
+      API_PORT: "8000"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ALLOW_ORIGINS: https://staging.vestrs.manishlamba.com
+      COOKIE_DOMAIN: .vestrs.manishlamba.com
+      LOG_LEVEL: INFO
+      ACCREDITATION_RESOLUTION_DELAY_SECONDS: "5"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/healthz || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    image: ghcr.io/lamba-manish/vestrs-api:${VESTRS_TAG:-staging}
+    restart: always
+    entrypoint: ["arq", "app.workers.WorkerSettings"]
+    environment:
+      APP_ENV: staging
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET}
+      LOG_LEVEL: INFO
+      ACCREDITATION_RESOLUTION_DELAY_SECONDS: "5"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      api: { condition: service_started }
+
+  # One-shot — copies the prebuilt static bundle from the web image's
+  # /app/dist into a named volume that Caddy serves. Exits 0 on success;
+  # Caddy's depends_on waits for that completion before starting.
+  web-publish:
+    image: ghcr.io/lamba-manish/vestrs-web:${VESTRS_TAG:-staging}
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -e
+        rm -rf /srv/web/*
+        cp -a /app/dist/. /srv/web/
+        echo "web bundle deployed at $$(date -u +%FT%TZ)"
+    volumes:
+      - web-dist:/srv/web
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../caddy/Caddyfile.staging:/etc/caddy/Caddyfile:ro
+      - web-dist:/srv/web:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+    depends_on:
+      api: { condition: service_healthy }
+      web-publish: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  postgres-data:
+  redis-data:
+  caddy-data:
+  caddy-config:
+  web-dist:
