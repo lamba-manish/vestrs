@@ -1,249 +1,230 @@
-# Vestrs — Mini Investment Onboarding Platform
+# Vestrs · Cross-border investment onboarding
 
-> Cross-border investment onboarding flow:
-> signup → KYC/AML/liveness → accreditation → bank link → investment → audit log.
+A take-home project rebuilt as an end-to-end production system. The
+flow is the canonical private-banking sequence: **signup → KYC →
+accreditation review → bank link → first investment → audit log**.
+Every external vendor is behind an adapter Protocol, every state-changing
+action writes a same-transaction audit row, and the whole stack lives
+on a single AWS EC2 box behind Caddy + Let's Encrypt.
 
-This README is intentionally short during early slices. It will grow into the
-full submission document (architecture, trade-offs, ops runbook) at Slice 21.
+> **Live**: https://vestrs.manishlamba.com — try a signup; the demo
+> mock-vendors resolve in seconds. API health: https://api.vestrs.manishlamba.com/healthz.
+> Docs: https://api.vestrs.manishlamba.com/docs.
+>
+> The site is provisioned for a one-week evaluation window and then
+> torn down.
 
-For project conventions, response envelope, env matrix, security baseline,
-and architecture rules, read [`CLAUDE.md`](./CLAUDE.md).
+---
 
-## Quick start (local)
+## At a glance
 
-Requirements: Docker + Docker Compose v2, GNU make.
+| | |
+|---|---|
+| **Backend** | Python 3.12 · FastAPI (async) · SQLAlchemy 2 async · Alembic · ARQ (Redis worker) · structlog · argon2id · pyjwt |
+| **Frontend** | Vite 5 · React 19 · TypeScript strict · Tailwind · shadcn/ui · TanStack Query · framer-motion · Zod |
+| **Data** | PostgreSQL 16 (NUMERIC(20,4) money, JSONB metadata, UUIDv6 PKs) · Redis 7 |
+| **Edge** | Caddy 2 (HTTP/3, auto-TLS, security headers, SPA fallback) |
+| **Cloud** | AWS — EC2 t3.small, Route53, S3 (state + backups), DynamoDB (state lock), SSM (Parameter Store + Session Manager) |
+| **CI** | GitHub Actions — ruff/black/mypy · vitest · Playwright · Trivy · gitleaks · SonarCloud · GHCR push |
+| **CD** | Push to `release/production` → re-Trivy → publish to GHCR → SSM `RunCommand` → `deploy.sh` on EC2 → smoke `/healthz` |
+| **Observability** | `/metrics` (FastAPI) · prometheus + grafana local profile · grafana-agent → Grafana Cloud Mimir+Loki for staging/prod |
+| **Quality gates** | 13 required CI checks before merge to `main` · branch protection · pre-commit (16 hooks) · pre-push pytest · CVE allowlist policy |
+
+---
+
+## What's interesting in here
+
+A take-home brief describes a flow; this repo is the **opinionated
+production implementation** of that flow. Things worth peeking at:
+
+- **`apps/api/app/adapters/`** — KYC / accreditation / bank are
+  vendor-agnostic Protocols. The mocks ship the same surface the real
+  Shufti / Jumio / Plaid integrations would. Email-tagged emails
+  (`+kyc_fail`, `+acc_fail`, `+kyc_pending`) deterministically drive
+  every decision branch from the FE.
+- **`apps/api/app/repositories/audit_logs.py`** — every action writes
+  an audit row in the same DB transaction as the action itself.
+  Failures get an *independent-session* write so they survive the
+  domain-error rollback. Cursor-paginated UUIDv6 keys.
+- **`apps/api/app/api/v1/investments.py`** — `Idempotency-Key` is
+  required, replays return the cached envelope, body-mismatched
+  replays return `409 IDEMPOTENCY_KEY_REUSED` and write a
+  `INVESTMENT_BLOCKED` audit row.
+- **`apps/web/src/lib/api.ts`** + **`apps/web/src/lib/error-messages.ts`**
+  — every backend response goes through a Zod-typed envelope; user-
+  visible toasts come from a code-keyed map, never `error.message`,
+  never `request_id`.
+- **`infra/terraform/`** — bootstrap stack (state bucket + DDB lock +
+  GH OIDC provider) + per-env stacks composing six modules. Strict
+  IAM trust: deploy role's `sub` is pinned to `release/<env>` AND the
+  matching GitHub Environment.
+- **`infra/cloud-init/ec2-bootstrap.yaml.tpl`** — first-boot user-data:
+  docker, ufw (deny-by-default, only 80/443 open), fail2ban (Caddy
+  log jail), 2GB swap, sshd hardening, repo clone, SSM-fetched env
+  file + GHCR PAT, systemd timer for nightly pg_dump → S3.
+- **`.github/workflows/`** — ci, e2e, security, sonarcloud, release,
+  deploy-staging, deploy-production. The release pipeline is
+  Trivy-gated; the production deploy gates on a GitHub Environment
+  with a manual reviewer.
+
+---
+
+## Architecture sketch
+
+```
+                       ┌───────────────────┐
+       Browser  ───────▶ Caddy (TLS, HSTS) │
+                       └─────────┬─────────┘
+                                 │
+                       ┌─────────┴─────────┐
+                       │                   │
+              static dist/             reverse_proxy
+              (web-publish)              api:8000
+                                            │
+                                  ┌─────────┴─────────┐
+                                  │   FastAPI (uvicorn)│
+                                  │  routers→services  │
+                                  │   →repositories→   │
+                                  │  Postgres / Redis  │
+                                  └─┬──────────────┬───┘
+                                    │              │
+                       enqueue accreditation        │
+                                    │              │
+                              ┌─────▼─────┐  ┌─────▼─────┐
+                              │ ARQ worker│  │  Postgres │
+                              │  (resolve)│  │  (audit,  │
+                              └───────────┘  │  users …) │
+                                             └───────────┘
+```
+
+Deeper: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+---
+
+## Evaluator quickstart (local)
+
+Requires Docker + Docker Compose v2 + GNU make.
 
 ```bash
 make bootstrap   # copies *.example env files (idempotent)
 make up          # builds and starts api + web + postgres + redis
-make logs        # tail
 ```
 
-Endpoints:
-- API health: `http://localhost:8000/healthz`
-- API docs: `http://localhost:8000/docs`
-- Web: `http://localhost:3000`
+- Web: http://localhost:3000
+- API health: http://localhost:8000/healthz
+- API docs: http://localhost:8000/docs
+
+The full happy-path takes ~30 seconds:
+
+1. Signup → arbitrary email + ≥12-char password.
+2. Profile → name + ISO-2 nationality / country.
+3. KYC → click *Submit KYC* (mock returns success).
+4. Accreditation → *Submit*; the page polls every 2s, the ARQ worker
+   resolves it in ~5s.
+5. Bank link → any 9-digit account, 8-digit routing.
+6. Invest → an amount under the seeded mock balance.
+7. Audit log → every action you just took, with metadata.
+
+Demo controls (email tags) for forcing failure branches:
+
+| Email contains | Outcome |
+|---|---|
+| `+kyc_fail` | KYC returns FAILED with retry. |
+| `+kyc_pending` | KYC stays PENDING (manual resolve). |
+| `+acc_fail` | Accreditation eventually FAILS. |
+| `+bank_fail` | Bank link rejected. |
 
 Stop with `make down`. Reset volumes with `make clean` (destroys local DB).
 
-## CI
+---
 
-Four workflows guard `main`:
+## Documentation
 
-- **CI** (`ci.yml`) — lint, typecheck, test (BE + FE), build images.
-- **E2E** (`e2e.yml`) — Playwright happy-path + KYC-failure specs
-  against a full stack inside the official Playwright runner image.
-- **Security** (`security.yml`) — gitleaks full-history secret scan +
-  Trivy HIGH/CRITICAL image scan, with a justified `.trivyignore`
-  allowlist. Re-runs weekly so new CVEs surface even in unchanged
-  base images.
-- **SonarCloud** (`sonarcloud.yml`) — coverage + quality-gate
-  decoration on PRs. Requires the `SONAR_TOKEN` repo secret AND the
-  repository variable `SONAR_ENABLED=true`. The job skips cleanly
-  while either is missing so PRs aren't blocked during setup.
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — request flow,
+  data model, adapter pattern, slice journal, performance budget.
+- **[docs/SECURITY.md](docs/SECURITY.md)** — auth model, audit log
+  shape, secrets management, security headers, CVE policy.
+- **[docs/RUNBOOK.md](docs/RUNBOOK.md)** — bootstrap-from-zero AWS
+  deploy, observability bring-up, disaster recovery.
+- **[CLAUDE.md](CLAUDE.md)** — project conventions (response envelope,
+  env matrix, error codes, branch model). Also the source-of-truth
+  document the AI pair-programmer reads at the start of every session.
 
-Reproduce CI locally with `make ci-local` (runs the same lint, types,
-tests, and gitleaks gates inside the dev container).
+---
 
-### Running e2e locally
+## Branch + release model
 
-```bash
-make up                # bring up the stack
-make e2e-install       # one-time: install Chromium inside the web container
-make e2e               # run Playwright
+| Branch | Purpose |
+|---|---|
+| `main` | Protected; squash-merge target. 13 required CI checks + 1 review (admin override during solo dev). |
+| `slice/<NN>-<name>` | Feature branches; one per slice. PR target is `main`. **Never deleted**, even after merge — they are the build journal. |
+| `release/staging` | Push fires `release.yml` (Trivy-gated GHCR publish) → `deploy-staging.yml` (SSM RunCommand). |
+| `release/production` | Same pipeline; the deploy job pauses on a required-reviewer GitHub Environment. |
+
+48-slice journal (so far) — see the commit log on `main` and the
+matching `slice/*` branches. Highlights:
+
+- 0–10: backend (envelope, middleware, auth, KYC, accreditation, bank, invest, audit).
+- 11–12: frontend shell + onboarding flow.
+- 13: GitHub Actions / Trivy / Sonar / Playwright / branch protection.
+- 14A: GHCR release pipeline + compose overlays + Caddy.
+- 14B: Terraform AWS stack + SSM-triggered deploys + nightly pg_dump.
+- 14C: `/metrics` endpoint + observability (local Prom/Grafana + Cloud agent).
+- 15-17: UX polish (favicon, optimistic top-nav, vendor chunking).
+- 18: this submission README + docs.
+
+---
+
+## Tradeoffs and what's deferred
+
+- **Single-AZ EC2.** No HA — picked deliberately for the take-home
+  budget. The compose stack runs everything on one t3.small;
+  Postgres + Redis are local volumes. Production-grade move would be
+  RDS Multi-AZ + ElastiCache + multiple stateless app instances
+  behind an ALB.
+- **Mock vendors.** Real KYC / accreditation / bank integrations live
+  behind the adapter Protocols; the swap-in is a config + new
+  `<Vendor>Adapter` class. The brief calls for mocks; the structure
+  shows the integration shape.
+- **Frontend rate-limit messaging.** Backend returns
+  `Retry-After`-bearing 429s; the FE currently surfaces a generic
+  "Too many requests" toast without the wait time. (Slice 19 candidate.)
+- **Mimir rules sync from CI.** Alert rules live in the repo
+  (`infra/observability/grafana/alerts/`) but `mimirtool rules sync`
+  is operator-run today; CI hook is a slice 14D follow-up.
+- **Worker liveness.** The arq worker has `restart: always` and
+  no inherited HEALTHCHECK (slice 16). Crashloop is caught; subtle
+  hangs would need an arq-specific Redis heartbeat probe — doable in
+  one slice if surfaced later.
+
+---
+
+## Repo layout
+
+```
+vestrs/
+├── apps/
+│   ├── api/              FastAPI + SQLAlchemy + Alembic + ARQ worker
+│   └── web/              Vite + React + Tailwind + Playwright
+├── infra/
+│   ├── terraform/        bootstrap + 6 modules + per-env stacks
+│   ├── compose/          local + staging + production overlays
+│   ├── caddy/            two Caddyfiles (staging.* / *) with HSTS+CSP
+│   ├── cloud-init/       EC2 first-boot user-data template
+│   ├── observability/    prometheus, grafana provisioning, agent.river,
+│   │                     dashboards (vestrs-api / vestrs-host),
+│   │                     alert rules, exporter configs
+│   └── scripts/          deploy.sh + backup/restore-postgres.sh
+├── docs/                 ARCHITECTURE.md, SECURITY.md, RUNBOOK.md
+├── .github/workflows/    ci, e2e, security, sonarcloud, release,
+│                         deploy-{staging,production}
+├── CLAUDE.md             project conventions / AI working agreement
+└── README.md             you are here
 ```
 
-Reports land at `apps/web/playwright-report/` and traces at
-`apps/web/test-results/`.
+---
 
-## Observability (slice 14C)
+## License + contact
 
-### Locally
-```bash
-make obs-up      # brings up prometheus + grafana + 5 exporters
-# Grafana → http://localhost:3001  (admin / admin)
-# Prom    → http://localhost:9090
-make obs-down    # stops them; data persists in named volumes
-```
-
-Two dashboards auto-provision: **Vestrs · API** (RPS, error rate,
-p50/p95/p99 by route, FD count, synthetic uptime) and **Vestrs · Host**
-(CPU, MEM, Disk, Net, container RSS, Postgres connections). Alert
-rules in `infra/observability/grafana/alerts/vestrs-rules.yml` load
-into Prometheus immediately; Grafana Cloud Mimir picks them up via
-`mimirtool rules sync` (slice 14D wires that into CI).
-
-### In staging / production
-
-`infra/compose/docker-compose.{staging,prod}.yml` includes the same
-exporters plus a `grafana-agent` service that scrapes them and
-`remote_write`s metrics + ships container logs to Grafana Cloud.
-
-The agent only starts when explicitly enabled via the `cloud-obs`
-compose profile. To turn it on:
-
-1. **Provision a Grafana Cloud free stack** (https://grafana.com →
-   *Create stack*). Note the Mimir URL + username and the Loki URL +
-   username.
-2. **Mint an access policy token** with `metrics:write` + `logs:write`
-   scopes on that stack.
-3. **Stash the secrets in SSM Parameter Store**:
-   ```bash
-   ENV=staging
-   for k in PROM_URL PROM_USER LOKI_URL LOKI_USER API_KEY; do
-     aws ssm put-parameter --type SecureString \
-       --name "/vestrs/$ENV/grafana_cloud_$(echo $k | tr A-Z a-z)" \
-       --value '<paste>'
-   done
-   ```
-4. **Update `.env.<env>`** (the SSM-stored copy) so cloud-init renders:
-   ```
-   COMPOSE_PROFILES=cloud-obs
-   GRAFANA_CLOUD_PROM_URL=...
-   GRAFANA_CLOUD_PROM_USER=...
-   GRAFANA_CLOUD_LOKI_URL=...
-   GRAFANA_CLOUD_LOKI_USER=...
-   GRAFANA_CLOUD_API_KEY=...
-   ```
-5. `git push <sha>:release/<env>` — next deploy starts the agent.
-
-Without those env vars set, the `grafana-agent` service stays out of
-the compose graph entirely (zero overhead).
-
-## Bootstrap from zero (slice 14B)
-
-The whole production stack — VPC, EC2, EIP, Route53 records, IAM
-roles, S3 backup bucket, GitHub OIDC trust — is in
-`infra/terraform/`. Order matters; do these once per AWS account.
-
-### Prerequisites
-- AWS account, AWS CLI v2, terraform ≥1.6 on your laptop.
-- `aws configure` (or SSO) with permissions to create IAM, EC2, S3,
-  DynamoDB, Route53, SSM resources.
-- Existing Route53 hosted zone for your apex domain (the `dns`
-  module references it via data source — it doesn't create the zone).
-
-### Step 1 · State backend
-```bash
-cd infra/terraform/bootstrap
-terraform init
-terraform apply           # creates vestrs-tfstate (S3) + vestrs-tfstate-lock (DDB) + GitHub OIDC provider
-```
-Then uncomment the `backend "s3" {}` block in `bootstrap/main.tf` and
-run `terraform init -migrate-state` to move bootstrap's own state
-into the bucket it just created.
-
-### Step 2 · SSM parameters (per env)
-Cloud-init reads these at instance boot. Create them as `SecureString`
-ahead of `terraform apply`:
-
-```bash
-ENV=staging     # or production
-REGION=ap-south-1
-
-# GHCR pull credential — `<gh-username>:<personal-access-token-with-read:packages>`
-aws ssm put-parameter --region $REGION --type SecureString \
-  --name "/vestrs/$ENV/ghcr_credential" \
-  --value 'lamba-manish:ghp_xxx'
-
-# Full .env.<env> file content (the deploy script's contract).
-aws ssm put-parameter --region $REGION --type SecureString \
-  --name "/vestrs/$ENV/env_file" \
-  --value "$(cat .env.$ENV.example | sed 's/__from_ssm__/<real-secret>/g')"
-```
-
-### Step 3 · Apply per-env stack
-```bash
-cd infra/terraform/envs/staging
-cp terraform.tfvars.example terraform.tfvars
-terraform init
-terraform apply
-```
-
-Outputs include `instance_id`, `elastic_ip`, and `deploy_role_arn`.
-Add the latter as a repo variable so the deploy workflows can use it:
-
-```bash
-gh variable set AWS_DEPLOY_ROLE_STAGING --body "<deploy_role_arn>" --repo lamba-manish/vestrs
-gh variable set AWS_INSTANCE_ID_STAGING  --body "<instance_id>"   --repo lamba-manish/vestrs
-gh variable set AWS_REGION                --body "ap-south-1"      --repo lamba-manish/vestrs
-```
-
-(Same pair for `production`, `AWS_DEPLOY_ROLE_PRODUCTION` etc.)
-
-### Step 4 · Configure GitHub Environments
-- **Settings → Environments → New environment → `staging`** (no protection rules).
-- **Settings → Environments → New environment → `production`**:
-  add yourself as a *Required reviewer*. The `deploy-production.yml`
-  job pauses there until you click Approve.
-
-### Step 5 · First deploy
-- Push the verified `main` SHA to `release/staging`:
-  ```bash
-  git push origin <sha>:release/staging
-  ```
-  This fires `release.yml` (publishes images) → `deploy-staging.yml`
-  (SSM → `deploy.sh staging` → smoke test).
-- Repeat to `release/production` once staging is verified.
-
-### Disaster recovery
-- Backups land at `s3://vestrs-<env>-pgbackups/<env>/<utc-iso>.sql.gz`
-  nightly via the systemd timer in cloud-init.
-- Manual snapshot before risky migrations:
-  `bash infra/scripts/backup-postgres.sh <env>`
-- Restore (requires confirmation by typing the env name):
-  `bash infra/scripts/restore-postgres.sh <env> s3://...`
-
-## Releases
-
-Pushing to `release/staging` or `release/production` triggers
-`.github/workflows/release.yml`, which:
-
-1. Builds api + web images.
-2. Re-runs Trivy (HIGH+CRITICAL fail) against the freshly built api
-   image — same gate as PR CI, repeated at release time so a CVE that
-   landed between merge and release blocks the publish.
-3. Pushes to GHCR with three tags each:
-   - `ghcr.io/lamba-manish/vestrs-{api,web}:<full-sha>` (immutable)
-   - `:sha-<7char>` (immutable, short)
-   - `:staging` or `:production` (floating; latest publish on that branch)
-
-Promote staging → production by pushing the verified staging SHA to
-`release/production`:
-
-```bash
-git push origin <verified-sha>:release/production
-```
-
-Roll back without retagging:
-
-```bash
-VESTRS_TAG=sha-abc1234 bash infra/scripts/deploy.sh production
-```
-
-### Deploying
-
-`infra/scripts/deploy.sh <staging|production>` runs **on the target
-host** (slice 14A — slice 14B will trigger this remotely from CI via
-SSM). It pulls the latest images, runs `docker compose up -d --wait`,
-and smoke-tests `https://<api-host>/healthz`. The api container's
-entrypoint runs `alembic upgrade head` on every start, so migrations
-apply automatically.
-
-The `.env.<env>` file must already be populated from AWS SSM
-Parameter Store before invoking `deploy.sh`. The script refuses to
-proceed without it.
-
-### Reading a red Trivy job
-
-Trivy fails the build on any HIGH or CRITICAL CVE with a fix
-available. Two paths to green:
-
-1. **Bump the base image** — the usual fix. Change the `FROM` line in
-   the relevant `Dockerfile`, rebuild, push.
-2. **Allowlist with a re-check date** — when no fix exists yet, add
-   the CVE to `.trivyignore` with a one-line justification and a
-   `Re-check by: YYYY-MM-DD` comment ≤60 days out. The weekly schedule
-   will re-fail once a fix lands.
-
-Never blanket-allowlist; always document.
+Internal take-home build. Not licensed for redistribution.
+Questions: see the issue tracker on the repo.
