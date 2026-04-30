@@ -25,6 +25,11 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.49.1-noble
       options: --user 0
+    defaults:
+      run:
+        # Force bash so brace expansion (and tail -N flags) work the
+        # same way they do under `runs-on:` jobs.
+        shell: bash
     services:
       postgres:
         image: postgres:16-alpine
@@ -100,16 +105,21 @@ jobs:
 
       - name: Wait for stack
         run: |
-          for i in {1..60}; do
+          i=0
+          while [ "$i" -lt 90 ]; do
             if curl -fsS http://localhost:8000/healthz > /dev/null \
                && curl -fsS http://localhost:3000 > /dev/null; then
-              echo "stack ready (i=$i)"
+              echo "stack ready after ${i}s"
               exit 0
             fi
+            i=$((i + 1))
             sleep 1
           done
-          echo "stack didn't come up — dumping logs"
-          tail -200 /tmp/api.log /tmp/worker.log /tmp/web.log || true
+          echo "stack didn't come up after 90s — dumping logs"
+          for f in /tmp/api.log /tmp/worker.log /tmp/web.log; do
+            echo "===== $f ====="
+            tail -n 200 "$f" 2>/dev/null || echo "(missing)"
+          done
           exit 1
 
       - name: Run Playwright
@@ -135,9 +145,7 @@ jobs:
       - name: Stack logs (always)
         if: always()
         run: |
-          echo "=== api.log ==="
-          tail -200 /tmp/api.log || true
-          echo "=== worker.log ==="
-          tail -200 /tmp/worker.log || true
-          echo "=== web.log ==="
-          tail -200 /tmp/web.log || true
+          for f in /tmp/api.log /tmp/worker.log /tmp/web.log; do
+            echo "===== $f ====="
+            tail -n 200 "$f" 2>/dev/null || echo "(missing)"
+          done
