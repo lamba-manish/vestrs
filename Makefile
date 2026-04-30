@@ -69,4 +69,40 @@ gitleaks: ## scan repo for secrets (no commit needed)
 	@command -v gitleaks >/dev/null && gitleaks detect --source . --redact -v \
 	 || docker run --rm -v "$(PWD)":/repo zricethezav/gitleaks:v8.21.2 detect --source /repo --redact -v
 
-.PHONY: help bootstrap up down restart logs ps api-shell web-shell api-test api-lint web-test web-lint clean hooks-install hooks-run hooks-update gitleaks
+trivy: ## scan built api+web images locally (HIGH+CRITICAL fail)
+	@docker build -t vestrs-api:scan --target runtime apps/api
+	@docker build -t vestrs-web:scan --target builder apps/web
+	@for img in vestrs-api:scan vestrs-web:scan; do \
+	  echo "--- trivy $$img ---"; \
+	  docker run --rm -v "$(PWD)/.trivyignore:/work/.trivyignore" \
+	    -v /var/run/docker.sock:/var/run/docker.sock \
+	    aquasec/trivy:latest image --severity HIGH,CRITICAL --ignore-unfixed \
+	    --ignorefile /work/.trivyignore --exit-code 1 $$img || exit 1; \
+	done
+
+# ---------- e2e ----------
+
+e2e: ## run Playwright against the running compose stack
+	$(COMPOSE) exec web pnpm e2e
+
+e2e-install: ## install Playwright browsers inside the web container (first-time setup)
+	$(COMPOSE) exec web pnpm exec playwright install --with-deps chromium
+
+# ---------- ci-local ----------
+
+ci-local: ## run the full CI matrix locally (lint+types+tests+build, BE+FE)
+	@echo "==> backend lint + types"
+	$(MAKE) api-lint
+	@echo "==> backend tests"
+	$(MAKE) api-test
+	@echo "==> frontend lint + types"
+	$(MAKE) web-lint
+	@echo "==> frontend tests"
+	$(MAKE) web-test
+	@echo "==> frontend build"
+	$(COMPOSE) exec web pnpm build
+	@echo "==> gitleaks"
+	$(MAKE) gitleaks
+	@echo "ci-local: all gates passed"
+
+.PHONY: help bootstrap up down restart logs ps api-shell web-shell api-test api-lint web-test web-lint clean hooks-install hooks-run hooks-update gitleaks trivy e2e e2e-install ci-local

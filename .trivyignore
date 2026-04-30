@@ -1,0 +1,17 @@
+# Trivy allowlist — every entry MUST justify itself.
+#
+# Format:
+#   # <CVE-id>: one-line justification (severity, base image, why deferred)
+#   # Re-check by: YYYY-MM-DD
+#   <CVE-id>
+#
+# Rules:
+# - Only allowlist a CVE when (a) no fixed version is available yet, or
+#   (b) the vulnerable code path is unreachable from our application.
+# - Always include a "Re-check by" date no more than 60 days out. The
+#   weekly Trivy schedule will re-fail once a fix lands.
+# - Never allowlist CRITICAL secret-disclosure or RCE vulns without
+#   explicit reviewer sign-off in the PR description.
+#
+# Keep this file empty when nothing needs to be deferred — that's the
+# desired steady state.

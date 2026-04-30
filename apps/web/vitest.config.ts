@@ -10,6 +10,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./tests/setup.ts"],
     css: false,
+    // Playwright owns tests/e2e — exclude them from the unit runner so
+    // `pnpm test` doesn't try to import @playwright/test in jsdom.
+    exclude: ["**/node_modules/**", "**/dist/**", "tests/e2e/**"],
   },
   resolve: {
     alias: {

@@ -1,0 +1,91 @@
+name: SonarCloud
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: sonar-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  sonar:
+    name: SonarCloud scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Skip on forks (no access to SONAR_TOKEN) and when SONAR_TOKEN
+    # isn't configured yet (so the workflow doesn't red-block PRs
+    # before the token has been added in repo settings).
+    if: >-
+      ${{
+        (github.event.pull_request.head.repo.full_name == github.repository ||
+         github.event_name != 'pull_request')
+        && vars.SONAR_ENABLED == 'true'
+      }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ---- regenerate api coverage so the report reflects the PR head ----
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: "0.5.6"
+      - run: uv python install 3.12
+      - name: Install api deps
+        working-directory: apps/api
+        run: uv sync --frozen
+
+      - name: Start ephemeral postgres + redis
+        run: |
+          docker run -d --name pg \
+            -e POSTGRES_USER=vestrs -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=vestrs \
+            -p 5432:5432 postgres:16-alpine
+          docker run -d --name rd -p 6379:6379 redis:7-alpine
+          for i in {1..30}; do
+            docker exec pg pg_isready -U vestrs && break
+            sleep 1
+          done
+
+      - name: Run pytest with coverage
+        working-directory: apps/api
+        env:
+          APP_ENV: local
+          DATABASE_URL: postgresql+asyncpg://vestrs:ci@localhost:5432/vestrs
+          REDIS_URL: redis://localhost:6379/0
+          JWT_SECRET: ci_jwt_secret_only_used_for_tests
+        run: |
+          uv run alembic upgrade head
+          uv run pytest -q --cov=app --cov-report=xml:coverage.xml
+
+      # ---- regenerate web coverage too ----
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - name: Install web deps
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+      - name: Run vitest with coverage
+        working-directory: apps/web
+        run: pnpm test --coverage --coverage.reporter=lcov || pnpm test
+
+      - name: SonarCloud scan
+        uses: SonarSource/sonarcloud-github-action@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectBaseDir=.
