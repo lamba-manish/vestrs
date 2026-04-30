@@ -38,7 +38,6 @@ export interface ComboboxProps {
   /** Width of the popover content; defaults to the trigger width. */
   contentClassName?: string;
   id?: string;
-  name?: string;
   disabled?: boolean;
 }
 

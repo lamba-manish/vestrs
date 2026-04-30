@@ -57,7 +57,7 @@ export type Profile = z.infer<typeof profileResponseSchema>;
 export function composePhone(values: ProfileFormValues): string {
   const country = findCountry(values.phone_country);
   if (!country) return "";
-  const digits = values.phone_number.replace(/\D/g, "");
+  const digits = values.phone_number.replaceAll(/\D/g, "");
   return `+${country.dial}${digits}`;
 }
 
@@ -69,7 +69,7 @@ export function splitPhone(
   domicile: string | null | undefined,
 ): { phone_country: string; phone_number: string } {
   if (!phone) return { phone_country: domicile ?? "US", phone_number: "" };
-  const digits = phone.replace(/^\+/, "").replace(/\D/g, "");
+  const digits = phone.replace(/^\+/, "").replaceAll(/\D/g, "");
   // Match longest dial code first to disambiguate +1 vs +1268, +44 vs +442 etc.
   const country = findLongestDialMatch(digits);
   if (!country) return { phone_country: domicile ?? "US", phone_number: digits };

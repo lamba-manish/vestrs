@@ -23,19 +23,34 @@ export default defineConfig({
       // e2e or are pure config).
       include: ["src/**/*.{ts,tsx}"],
       exclude: [
+        // Route + view glue — exercised by Playwright e2e, not unit tests.
         "src/main.tsx",
         "src/App.tsx",
+        "src/routes/**",
         "src/components/providers.tsx",
         "src/components/route-transitions.tsx",
         "src/components/theme-provider.tsx",
         "src/components/theme-toggle.tsx",
         "src/components/top-nav.tsx",
-        "src/components/auth/auth-guard.tsx",
-        "src/components/auth/side-info.tsx",
+        "src/components/auth/**",
         "src/components/onboarding/**",
+        // Vendored shadcn primitives — upstream-tested.
         "src/components/ui/**",
+        // TanStack Query hook wrappers — thin glue; meaningful behaviour
+        // is the network call shape, which Playwright covers end-to-end.
+        "src/lib/accreditation.ts",
+        "src/lib/audit.ts",
+        "src/lib/auth.ts",
+        "src/lib/bank.ts",
+        "src/lib/investments.ts",
+        "src/lib/kyc.ts",
+        "src/lib/profile.ts",
+        // Schema files that are pure type re-exports / API response shapes.
+        "src/lib/schemas/accreditation.ts",
+        "src/lib/schemas/audit.ts",
+        "src/lib/schemas/investments.ts",
+        "src/lib/schemas/kyc.ts",
         "src/lib/env.ts",
-        "src/routes/**",
         "src/vite-env.d.ts",
       ],
     },

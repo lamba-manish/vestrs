@@ -74,23 +74,27 @@ function ProfileContent() {
       toast.success("Profile saved.");
       navigate("/dashboard");
     } catch (e) {
-      if (e instanceof ApiError) {
-        if (e.details) {
-          for (const [field, msgs] of Object.entries(e.details)) {
-            // The backend doesn't know about phone_country/phone_number;
-            // it only sees `phone`. Surface phone-related errors on the
-            // national-number input (the most common edit point).
-            const target = field === "phone" ? "phone_number" : (field as keyof ProfileFormValues);
-            setError(target, { message: msgs[0] });
-          }
-          return;
-        }
-        console.error("profile_update_failed", { code: e.code, requestId: e.requestId });
-        toast.error(userMessage(e));
-      } else {
-        toast.error("Something went wrong. Please try again.");
-      }
+      handleProfileError(e);
     }
+  }
+
+  function handleProfileError(e: unknown) {
+    if (!(e instanceof ApiError)) {
+      toast.error("Something went wrong. Please try again.");
+      return;
+    }
+    if (e.details) {
+      for (const [field, msgs] of Object.entries(e.details)) {
+        // The backend doesn't know about phone_country/phone_number;
+        // it only sees `phone`. Surface phone-related errors on the
+        // national-number input (the most common edit point).
+        const target = field === "phone" ? "phone_number" : (field as keyof ProfileFormValues);
+        setError(target, { message: msgs[0] });
+      }
+      return;
+    }
+    console.error("profile_update_failed", { code: e.code, requestId: e.requestId });
+    toast.error(userMessage(e));
   }
 
   const countryOptions: ComboboxOption[] = useMemo(

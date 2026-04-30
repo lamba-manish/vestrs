@@ -40,4 +40,6 @@ export const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputPro
     );
   },
 );
-PasswordInput.displayName = "PasswordInput";
+// NOSONAR — Sonar's S2068 hardcoded-password rule flags the identifier
+// "PasswordInput" itself; this is a component name, not a credential.
+PasswordInput.displayName = "PasswordInput"; // NOSONAR
