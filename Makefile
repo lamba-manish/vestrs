@@ -109,7 +109,7 @@ compose-config-staging: ## render the staging compose file with vars expanded
 	docker compose -f infra/compose/docker-compose.staging.yml --env-file .env.staging config
 
 compose-config-prod: ## render the prod compose file with vars expanded
-	docker compose -f infra/compose/docker-compose.prod.yml --env-file .env.production config
+	docker compose -f infra/compose/docker-compose.production.yml --env-file .env.production config
 
 # ---------- e2e ----------
 

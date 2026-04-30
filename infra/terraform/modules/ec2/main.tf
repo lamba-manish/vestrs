@@ -13,7 +13,7 @@ terraform {
 
 resource "aws_security_group" "ec2" {
   name        = "vestrs-${var.env}-ec2"
-  description = "vestrs ${var.env} — public 80/443 only; SSH closed."
+  description = "vestrs ${var.env} - public 80/443 only; SSH closed."
   vpc_id      = var.vpc_id
 
   ingress {

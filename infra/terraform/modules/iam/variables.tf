@@ -4,9 +4,8 @@ variable "env" {
 }
 
 variable "backups_bucket_arn" {
-  description = "ARN of the pg_dump backup bucket; null disables the backups policy."
+  description = "ARN of the pg_dump backup bucket the EC2 role gets read/write on."
   type        = string
-  default     = null
 }
 
 variable "ghcr_credential_param_arn" {

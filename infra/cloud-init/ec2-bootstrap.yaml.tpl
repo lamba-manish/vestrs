@@ -27,9 +27,12 @@ packages:
   - lsb-release
   - ufw
   - fail2ban
-  - awscli
+  - unzip
   - unattended-upgrades
   - jq
+  # Note: Ubuntu 24.04 (noble) dropped the deprecated `awscli` (v1)
+  # package from the base repos. AWS CLI v2 is installed from the
+  # official tarball in `runcmd` below.
 
 users:
   # Operator login is via SSM Session Manager, which uses ssm-user.
@@ -132,18 +135,26 @@ runcmd:
       echo '/swapfile none swap sw 0 0' >> /etc/fstab
     fi
 
-  # ----- docker -----
-  - install -m 0755 -d /etc/apt/keyrings
-  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-  - chmod a+r /etc/apt/keyrings/docker.asc
+  # ----- AWS CLI v2 (Ubuntu 24.04 dropped awscli v1 from base) -----
   - |
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
-      https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$$VERSION_CODENAME") stable" \
-      > /etc/apt/sources.list.d/docker.list
-  - apt-get update -y
-  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-  - systemctl enable --now docker
-  - usermod -aG docker deploy
+    if ! command -v aws >/dev/null; then
+      curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+      unzip -q -o /tmp/awscliv2.zip -d /tmp
+      /tmp/aws/install --update
+      rm -rf /tmp/aws /tmp/awscliv2.zip
+    fi
+
+  # ----- docker (single shell block keeps the heredoc + escape clean) -----
+  - |
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $CODENAME stable" > /etc/apt/sources.list.d/docker.list
+    apt-get update -y
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    systemctl enable --now docker
+    usermod -aG docker deploy
 
   # ----- ufw -----
   - ufw default deny incoming
