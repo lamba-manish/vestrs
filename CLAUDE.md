@@ -494,12 +494,21 @@ Rules:
   `release/staging`, then promote a tagged SHA to `release/production`.
   The slice branch stays put.
 
-**Server-side branch protection is currently OFF**: the repo is private
-on a free GitHub plan, which excludes both classic branch protection and
-rulesets. Enforcement today is pre-commit hooks + workflow discipline.
-Slice 13 (CI) adds required-status-checks once we either (a) make the
-repo public, (b) upgrade to GitHub Pro/Team, or (c) the user accepts
-hook-only enforcement permanently. Decision deferred to slice 13.
+**Server-side branch protection is ON** as of slice 13. The repo was
+flipped to **public** in slice 13 to unlock free Actions minutes,
+classic branch-protection rules, and SonarCloud's free tier. The
+following ruleset is enforced on `main`, `release/staging`, and
+`release/production`:
+
+- Required status checks (must pass before merge): every job in
+  `ci.yml`, `e2e.yml`, `security.yml`, and `sonarcloud.yml`.
+- ≥1 approving review on PRs into `main`.
+- No direct pushes (PR-only).
+- No force-push, no branch deletion.
+- Linear history required (squash-merge only).
+
+Pre-commit hooks remain in place as the first line of defence; CI is
+the second.
 
 ## 13. Quality gates (must all pass before merge)
 
@@ -510,17 +519,34 @@ Local (pre-commit):
 - `hadolint` on changed Dockerfiles.
 - Conventional commit message check.
 
-CI (GitHub Actions, on every PR):
-1. Lint + typecheck (BE + FE).
-2. Unit + integration tests with coverage upload.
-3. `gitleaks detect` over full history of the PR.
-4. SonarCloud scan (PR decoration + quality gate).
-5. Docker build (api, worker, web).
-6. Trivy scan on built images (HIGH/CRITICAL fail the build).
-7. Playwright e2e against ephemeral docker-compose.
+CI (GitHub Actions, on every PR — workflows under `.github/workflows/`):
 
-Merge to `main` is blocked unless all of the above are green and at least
-one human reviewer (plus `/security-review`) has approved.
+`ci.yml`:
+1. `api-lint-types`  — `ruff` + `black --check` + `mypy`.
+2. `api-tests`       — `pytest` + coverage (Postgres + Redis service containers).
+3. `web-lint-types`  — `eslint` + `tsc -b`.
+4. `web-tests`       — `vitest`.
+5. `web-build`       — `vite build`, dist uploaded as artifact.
+6. `build-images`    — `docker build` of api + web (no push).
+
+`e2e.yml`:
+7. `playwright`      — happy-path + kyc-failure specs against the full
+   stack, run inside `mcr.microsoft.com/playwright:vX.Y.Z-noble` with
+   Postgres + Redis service containers. Traces, videos, and HTML
+   report uploaded as artifacts on failure.
+
+`security.yml`:
+8. `gitleaks`        — full-history secret scan.
+9. `trivy`           — HIGH+CRITICAL vuln scan on built images, with
+   `.trivyignore` allowlist (every entry justified, ≤60-day re-check
+   date). SARIF uploaded to GitHub code scanning. Re-runs weekly.
+
+`sonarcloud.yml`:
+10. `sonar`          — coverage + quality-gate decoration on PRs
+    (skipped on forks; `SONAR_TOKEN` repo secret).
+
+Merge to `main` is blocked unless all required jobs are green AND at
+least one human reviewer has approved.
 
 ## 14. Infrastructure & deploy
 
