@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1 import api_router
 from app.core.config import get_settings
 from app.core.envelope import success_envelope
 from app.core.handlers import register_exception_handlers
@@ -58,6 +59,7 @@ app.add_middleware(
 )
 
 register_exception_handlers(app)
+app.include_router(api_router)
 
 
 @app.get("/healthz", tags=["meta"])
