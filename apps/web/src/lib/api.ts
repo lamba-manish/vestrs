@@ -21,12 +21,15 @@ export class ApiError extends Error {
   readonly status: number;
   readonly details: Record<string, string[]> | undefined;
   readonly requestId: string | null | undefined;
+  /** Seconds the server told us to wait, parsed from `Retry-After`. */
+  readonly retryAfterSeconds: number | undefined;
 
   constructor(
     payload: ErrorPayload,
     status: number,
     details?: Record<string, string[]>,
     requestId?: string | null,
+    retryAfterSeconds?: number,
   ) {
     super(payload.message);
     this.name = "ApiError";
@@ -34,12 +37,27 @@ export class ApiError extends Error {
     this.status = status;
     this.details = details;
     this.requestId = requestId;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 
   /** Best-effort message for `field`; falls back to the top-level message. */
   fieldMessage(field: string): string | undefined {
     return this.details?.[field]?.[0];
   }
+}
+
+function parseRetryAfter(headers: Headers): number | undefined {
+  const raw = headers.get("retry-after");
+  if (!raw) return undefined;
+  // RFC 9110 allows either a positive integer of seconds or an HTTP-date.
+  // Our server only emits seconds, but be defensive.
+  const asInt = Number(raw);
+  if (Number.isFinite(asInt) && asInt >= 0) return Math.ceil(asInt);
+  const asDate = Date.parse(raw);
+  if (Number.isFinite(asDate)) {
+    return Math.max(0, Math.ceil((asDate - Date.now()) / 1000));
+  }
+  return undefined;
 }
 
 export interface RequestOptions {
@@ -103,6 +121,7 @@ async function request<T extends z.ZodTypeAny>(
   }
 
   if (!response.ok) {
+    const retryAfter = parseRetryAfter(response.headers);
     const failure = failureEnvelopeSchema.safeParse(json);
     if (failure.success) {
       throw new ApiError(
@@ -110,6 +129,7 @@ async function request<T extends z.ZodTypeAny>(
         response.status,
         failure.data.details,
         failure.data.request_id ?? response.headers.get("x-request-id"),
+        retryAfter,
       );
     }
     throw new ApiError(
@@ -117,6 +137,7 @@ async function request<T extends z.ZodTypeAny>(
       response.status,
       undefined,
       response.headers.get("x-request-id"),
+      retryAfter,
     );
   }
 

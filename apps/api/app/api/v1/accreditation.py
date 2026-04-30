@@ -42,7 +42,7 @@ async def get_status(
     "",
     status_code=202,
     summary="Submit an accreditation review (async — resolves later)",
-    dependencies=[Depends(limit(times=10, seconds=3600, bucket="accreditation:submit"))],
+    dependencies=[Depends(limit(times=20, seconds=3600, bucket="accreditation:submit"))],
 )
 async def submit(
     request: Request,

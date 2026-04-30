@@ -58,7 +58,7 @@ async def list_investments(
     "",
     status_code=201,
     summary="Create an investment (Idempotency-Key required)",
-    dependencies=[Depends(limit(times=20, seconds=300, bucket="invest:create"))],
+    dependencies=[Depends(limit(times=60, seconds=300, bucket="invest:create"))],
 )
 async def create_investment(
     body: InvestmentCreateRequest,

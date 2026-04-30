@@ -40,7 +40,7 @@ async def get_status(
     "/link",
     status_code=201,
     summary="Link a bank account (Plaid-like; only masked details persisted)",
-    dependencies=[Depends(limit(times=10, seconds=3600, bucket="bank:link"))],
+    dependencies=[Depends(limit(times=20, seconds=3600, bucket="bank:link"))],
 )
 async def link(
     body: BankLinkRequest,

@@ -80,6 +80,59 @@ describe("api", () => {
     });
   });
 
+  it("parses Retry-After (seconds) on 429 into ApiError.retryAfterSeconds", async () => {
+    global.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            success: false,
+            error: { code: "RATE_LIMITED", message: "Too many." },
+          }),
+          { status: 429, headers: { "retry-after": "47" } },
+        ),
+    );
+    await expect(api.get("/x", dataSchema)).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+      status: 429,
+      retryAfterSeconds: 47,
+    });
+  });
+
+  it("parses Retry-After (HTTP-date) into seconds-from-now", async () => {
+    const future = new Date(Date.now() + 90_000).toUTCString();
+    global.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            success: false,
+            error: { code: "RATE_LIMITED", message: "Too many." },
+          }),
+          { status: 429, headers: { "retry-after": future } },
+        ),
+    );
+    try {
+      await api.get("/x", dataSchema);
+      expect.fail("should have thrown");
+    } catch (e) {
+      const err = e as ApiError;
+      expect(err.retryAfterSeconds).toBeGreaterThanOrEqual(80);
+      expect(err.retryAfterSeconds).toBeLessThanOrEqual(95);
+    }
+  });
+
+  it("leaves retryAfterSeconds undefined when header is missing", async () => {
+    mockFetch(
+      { success: false, error: { code: "RATE_LIMITED", message: "Too many." } },
+      { status: 429 },
+    );
+    try {
+      await api.get("/x", dataSchema);
+      expect.fail("should have thrown");
+    } catch (e) {
+      expect((e as ApiError).retryAfterSeconds).toBeUndefined();
+    }
+  });
+
   it("sends credentials and JSON content-type on POST", async () => {
     const f = vi.fn(
       async () => new Response(JSON.stringify({ success: true, data: { value: 1 } })),
