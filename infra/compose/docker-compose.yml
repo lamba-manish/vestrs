@@ -93,7 +93,7 @@ services:
     volumes:
       - ../../apps/web:/app
       - web-node-modules:/app/node_modules
-      - web-next-cache:/app/.next
+      - web-vite-cache:/app/node_modules/.vite
     depends_on:
       - api
 
@@ -101,4 +101,4 @@ volumes:
   postgres-data:
   redis-data:
   web-node-modules:
-  web-next-cache:
+  web-vite-cache:

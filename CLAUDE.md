@@ -16,13 +16,14 @@ interfaces. Real vendors swap in by replacing the adapter, never the caller.
 - **Backend**: Python 3.12, FastAPI (async), SQLAlchemy 2 async, Alembic,
   Pydantic v2, structlog, ARQ (Redis-backed worker). **`uv` is the only
   package manager** — never `pip`, `poetry`, or `pipenv`.
-- **Frontend**: Next.js 15 (App Router), TypeScript (strict), Tailwind,
-  shadcn/ui, React Hook Form + Zod, TanStack Query.
-  Built as **static export** (`output: 'export'`) — Caddy serves it as
-  static files; no Node server in production. SSR/server actions are
-  forbidden in this codebase. If you need server-only logic later, raise
-  it; we'll either move it to FastAPI or switch the build mode in a
-  dedicated PR.
+- **Frontend**: Vite 5 + React 19 + react-router-dom 7 SPA, TypeScript
+  (strict), Tailwind, shadcn/ui-style primitives over Radix, React Hook
+  Form + Zod, TanStack Query, Sonner, framer-motion. Built to a static
+  `dist/` bundle that Caddy serves directly. No SSR, no Node runtime in
+  production — pure static SPA. (We started on Next.js but the Next 15 +
+  React 19 + standalone build hit an unworkable upstream bug in the
+  synthesised /404 prerender; Vite is simpler and avoids the entire
+  prerender concern for an authenticated SPA.)
 - **Data**: PostgreSQL 16, Redis 7.
 - **Container**: Docker multi-stage, docker-compose.
 - **Reverse proxy / TLS**: Caddy (auto-TLS via Let's Encrypt) on every env
