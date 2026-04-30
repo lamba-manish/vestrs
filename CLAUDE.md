@@ -414,6 +414,14 @@ Rules:
   (`no-commit-to-branch`).
 - Every PR to `main` carries one slice. Cross-cutting refactors get
   their own slice + their own PR.
+- **Never delete slice branches** locally or on the remote — neither
+  before nor after merge. They are the permanent record of how the
+  project was built and the natural anchor for `git blame` /
+  archaeology. Renaming or force-pushing them is also forbidden once
+  they have been pushed.
+- After a slice PR is squash-merged, push and verify state on
+  `release/staging`, then promote a tagged SHA to `release/production`.
+  The slice branch stays put.
 
 **Server-side branch protection is currently OFF**: the repo is private
 on a free GitHub plan, which excludes both classic branch protection and
