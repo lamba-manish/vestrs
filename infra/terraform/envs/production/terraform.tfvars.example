@@ -1,0 +1,5 @@
+backups_bucket_name = "vestrs-production-pgbackups"
+# Override only if you need to:
+# region              = "ap-south-1"
+# dns_zone_name       = "manishlamba.com"
+# github_repository   = "lamba-manish/vestrs"
