@@ -77,7 +77,9 @@ test("happy path — onboard a new investor end-to-end", async ({ page }) => {
   await page.getByLabel(/^amount/i).fill("1500.00");
   await page.getByLabel(/notes/i).fill("E2E happy-path");
   await page.getByRole("button", { name: /place investment/i }).click();
-  await expect(page.getByText(/investment placed/i)).toBeVisible({
+  // Sonner toast and the CardTitle both render the words "Investment
+  // placed"; the toast has a trailing period, the title doesn't.
+  await expect(page.getByText("Investment placed", { exact: true })).toBeVisible({
     timeout: 15_000,
   });
   await expect(page.getByText(/escrow reference/i)).toBeVisible();
