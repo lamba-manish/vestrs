@@ -63,6 +63,8 @@ repos:
           - structlog>=24.4
           - uuid6>=2024.7.10
           - types-redis>=4.6
+          - sqlalchemy[asyncio]>=2.0.36
+          - alembic>=1.14
 
   # ---------- javascript / typescript / json / md / css ----------
   - repo: https://github.com/rbubley/mirrors-prettier
