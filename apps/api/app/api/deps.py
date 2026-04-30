@@ -1,21 +1,47 @@
-"""FastAPI dependencies — DB session, request context, auth."""
+"""FastAPI dependencies — DB session, request context, auth.
+
+Two flavours of "who's calling":
+
+- ``TokenSubjectDep`` — derived purely from the access-cookie JWT. No DB
+  hit. Carries id, email, role. Use this when the route only needs to
+  authorize or to identify the caller (most endpoints).
+- ``CurrentUserDep`` — loads the User row. Use only when fresh DB-side
+  fields are needed (profile editing, anything dependent on flags that
+  may have changed since the access token was issued).
+
+Authorization for role-gated routes uses the ``RoleRequired`` factory:
+
+    admin = Depends(RoleRequired(Role.ADMIN))
+    @router.get("/admin/foo", dependencies=[admin])
+    async def foo(): ...
+"""
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Cookie, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import DomainError, ErrorCode
-from app.core.security import ACCESS_COOKIE, REFRESH_COOKIE, TokenType, decode_token
+from app.core.errors import DomainError, ErrorCode, ForbiddenError
+from app.core.security import (
+    ACCESS_COOKIE,
+    REFRESH_COOKIE,
+    Role,
+    TokenType,
+    decode_token,
+)
 from app.db.session import get_session
 from app.models.user import User
 from app.repositories.audit_logs import AuditLogRepository
 from app.repositories.refresh_tokens import RefreshTokenRepository
 from app.repositories.users import UserRepository
 from app.services.auth import AuthService, RequestContext
+
+# ---- DB session -----------------------------------------------------------
 
 
 async def db_session() -> AsyncIterator[AsyncSession]:
@@ -24,6 +50,9 @@ async def db_session() -> AsyncIterator[AsyncSession]:
 
 
 SessionDep = Annotated[AsyncSession, Depends(db_session)]
+
+
+# ---- request context ------------------------------------------------------
 
 
 def request_context(request: Request) -> RequestContext:
@@ -43,6 +72,9 @@ def request_context(request: Request) -> RequestContext:
 RequestCtxDep = Annotated[RequestContext, Depends(request_context)]
 
 
+# ---- service factories ----------------------------------------------------
+
+
 def auth_service(session: SessionDep) -> AuthService:
     return AuthService(
         users=UserRepository(session),
@@ -54,30 +86,76 @@ def auth_service(session: SessionDep) -> AuthService:
 AuthServiceDep = Annotated[AuthService, Depends(auth_service)]
 
 
-async def current_user(
+# ---- token-derived caller (no DB hit) -------------------------------------
+
+
+@dataclass(frozen=True)
+class TokenSubject:
+    id: UUID
+    email: str
+    role: Role
+
+
+def _unauthenticated() -> DomainError:
+    err = DomainError("Authentication required.")
+    err.code = ErrorCode.AUTH_TOKEN_INVALID
+    err.http_status = 401
+    return err
+
+
+async def token_subject(
     request: Request,
-    session: SessionDep,
     access_token: Annotated[str | None, Cookie(alias=ACCESS_COOKIE)] = None,
-) -> User:
+) -> TokenSubject:
     if access_token is None:
-        err = DomainError("Authentication required.")
-        err.code = ErrorCode.AUTH_TOKEN_INVALID
-        err.http_status = 401
-        raise err
-
+        raise _unauthenticated()
     payload = decode_token(access_token, expected=TokenType.ACCESS)
-    user = await UserRepository(session).get_by_id(payload.sub)
-    if user is None:
-        err = DomainError("User no longer exists.")
-        err.code = ErrorCode.AUTH_TOKEN_INVALID
-        err.http_status = 401
-        raise err
+    if payload.email is None:
+        # Token is well-formed but missing the email claim — treat as invalid.
+        raise _unauthenticated()
+    request.state.user_id = str(payload.sub)
+    return TokenSubject(id=payload.sub, email=payload.email, role=payload.role)
 
-    request.state.user_id = str(user.id)
+
+TokenSubjectDep = Annotated[TokenSubject, Depends(token_subject)]
+
+
+# ---- DB-fresh caller (loads the User row) ---------------------------------
+
+
+async def current_user(subject: TokenSubjectDep, session: SessionDep) -> User:
+    user = await UserRepository(session).get_by_id(subject.id)
+    if user is None:
+        raise _unauthenticated()
     return user
 
 
 CurrentUserDep = Annotated[User, Depends(current_user)]
+
+
+# ---- role gate ------------------------------------------------------------
+
+
+class RoleRequired:
+    """Dependency factory that 403s if the caller's token role isn't allowed.
+
+    Usage:
+        admin_only = Depends(RoleRequired(Role.ADMIN))
+        @router.get("/admin/foo", dependencies=[admin_only])
+    """
+
+    def __init__(self, *roles: Role) -> None:
+        if not roles:
+            raise ValueError("RoleRequired needs at least one role")
+        self._allowed = frozenset(roles)
+
+    async def __call__(self, subject: TokenSubjectDep) -> TokenSubject:
+        if subject.role not in self._allowed:
+            raise ForbiddenError("Insufficient role.")
+        return subject
+
+
+# ---- refresh cookie -------------------------------------------------------
 
 
 async def refresh_cookie(

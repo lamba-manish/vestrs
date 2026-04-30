@@ -26,10 +26,17 @@ class LoginRequest(_Strict):
 
 
 class UserPublic(BaseModel):
+    """Public user shape — what the client is allowed to render.
+
+    Deliberately excludes the admin flag and any role/permission state. Roles
+    live in the access-token JWT and are enforced server-side via
+    ``RoleRequired``; the client never decides what a user can do based on
+    response flags.
+    """
+
     id: UUID
     email: EmailStr
     full_name: str | None = None
-    is_admin: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

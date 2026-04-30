@@ -16,6 +16,7 @@ from app.api.deps import (
     CurrentUserDep,
     RefreshCookieDep,
     RequestCtxDep,
+    TokenSubjectDep,
 )
 from app.core.envelope import success_envelope
 from app.core.rate_limit import limit
@@ -120,8 +121,24 @@ async def logout(
     return success_envelope({"logged_out": True}, request_id=request.state.request_id)
 
 
-@router.get("/me", summary="Return the authenticated user")
-async def me(request: Request, user: CurrentUserDep) -> dict[str, object]:
+@router.get(
+    "/me",
+    summary="Return the authenticated user (from token claims, no DB hit)",
+)
+async def me(request: Request, subject: TokenSubjectDep) -> dict[str, object]:
+    # Identity comes from the access-token claims, not the DB. Profile fields
+    # (slice 5+) will live behind their own endpoint that does hit the DB.
+    return success_envelope(
+        {"id": str(subject.id), "email": subject.email},
+        request_id=request.state.request_id,
+    )
+
+
+@router.get(
+    "/profile",
+    summary="Return the authenticated user's full profile (DB-fresh)",
+)
+async def profile(request: Request, user: CurrentUserDep) -> dict[str, object]:
     return success_envelope(
         UserPublic.model_validate(user).model_dump(mode="json"),
         request_id=request.state.request_id,

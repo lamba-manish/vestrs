@@ -34,6 +34,11 @@ class TokenType(StrEnum):
     REFRESH = "refresh"
 
 
+class Role(StrEnum):
+    USER = "user"
+    ADMIN = "admin"
+
+
 @dataclass(frozen=True)
 class TokenPayload:
     sub: UUID  # user id
@@ -42,6 +47,8 @@ class TokenPayload:
     family_id: UUID | None  # only meaningful for refresh tokens
     iat: int
     exp: int
+    email: str | None = None  # access tokens only
+    role: Role = Role.USER  # access tokens only; refresh stays minimal
 
 
 _ph = PasswordHasher()
@@ -88,8 +95,19 @@ def _now() -> datetime:
 
 
 def issue_access_token(
-    user_id: UUID, jti: UUID, *, settings: Settings | None = None
+    user_id: UUID,
+    jti: UUID,
+    *,
+    email: str,
+    role: Role,
+    settings: Settings | None = None,
 ) -> tuple[str, datetime]:
+    """Access token carries identity (sub, email) and authorization (role).
+
+    Embedding ``role`` lets routes authorize without a DB lookup; the cost is
+    bounded staleness — a role change only takes effect on the next refresh
+    (≤ access TTL = 15 minutes).
+    """
     s = settings or get_settings()
     issued = _now()
     expires = issued + timedelta(seconds=s.access_token_ttl_seconds)
@@ -100,6 +118,8 @@ def issue_access_token(
             "type": TokenType.ACCESS.value,
             "iat": int(issued.timestamp()),
             "exp": int(expires.timestamp()),
+            "email": email,
+            "role": role.value,
         },
         s.jwt_secret,
         algorithm=s.jwt_algorithm,
@@ -155,6 +175,8 @@ def decode_token(
 
     try:
         family_id = UUID(raw["family_id"]) if raw.get("family_id") else None
+        role_raw = raw.get("role")
+        role = Role(role_raw) if role_raw else Role.USER
         return TokenPayload(
             sub=UUID(raw["sub"]),
             jti=UUID(raw["jti"]),
@@ -162,6 +184,8 @@ def decode_token(
             family_id=family_id,
             iat=int(raw["iat"]),
             exp=int(raw["exp"]),
+            email=raw.get("email"),
+            role=role,
         )
     except (KeyError, ValueError) as exc:
         raise _domain_error(ErrorCode.AUTH_TOKEN_INVALID, "Malformed token.") from exc

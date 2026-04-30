@@ -15,6 +15,7 @@ from uuid import UUID
 from app.core.errors import AuthError, ConflictError, DomainError, ErrorCode
 from app.core.logging import get_logger
 from app.core.security import (
+    Role,
     TokenType,
     decode_token,
     hash_password,
@@ -220,9 +221,10 @@ class AuthService:
     ) -> _IssuedRefresh:
         token_id = new_jti()
         family = family_id if family_id is not None else new_jti()
+        role = Role.ADMIN if user.is_admin else Role.USER
 
         refresh_jwt, refresh_exp = issue_refresh_token(user.id, token_id, family)
-        access_jwt, access_exp = issue_access_token(user.id, new_jti())
+        access_jwt, access_exp = issue_access_token(user.id, new_jti(), email=user.email, role=role)
 
         await self.refresh_tokens.create(
             token_id=token_id,

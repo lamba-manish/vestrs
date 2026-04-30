@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # ---- auth ----
-    jwt_secret: str = "change_me_in_local_only_must_override_in_envs"
+    jwt_secret: str = "change_me_in_local_only_must_override_in_envs"  # noqa: S105
     jwt_algorithm: str = "HS256"
     access_token_ttl_seconds: int = 60 * 15  # 15 minutes
     refresh_token_ttl_seconds: int = 60 * 60 * 24 * 14  # 14 days
