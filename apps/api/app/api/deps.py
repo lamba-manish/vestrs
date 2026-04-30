@@ -40,6 +40,7 @@ from app.repositories.audit_logs import AuditLogRepository
 from app.repositories.refresh_tokens import RefreshTokenRepository
 from app.repositories.users import UserRepository
 from app.services.auth import AuthService, RequestContext
+from app.services.users import UserService
 
 # ---- DB session -----------------------------------------------------------
 
@@ -84,6 +85,16 @@ def auth_service(session: SessionDep) -> AuthService:
 
 
 AuthServiceDep = Annotated[AuthService, Depends(auth_service)]
+
+
+def user_service(session: SessionDep) -> UserService:
+    return UserService(
+        users=UserRepository(session),
+        audit=AuditLogRepository(session),
+    )
+
+
+UserServiceDep = Annotated[UserService, Depends(user_service)]
 
 
 # ---- token-derived caller (no DB hit) -------------------------------------
