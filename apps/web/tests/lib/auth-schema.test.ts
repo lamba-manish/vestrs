@@ -20,6 +20,13 @@ describe("PASSWORD_RULES", () => {
     expect(r("symbol").test("NoSymbolAt1All")).toBe(false);
     expect(r("symbol").test("HasSymbol1!")).toBe(true);
   });
+
+  it("each rule carries a user-facing nudge", () => {
+    for (const rule of PASSWORD_RULES) {
+      expect(rule.nudge.length).toBeGreaterThan(0);
+      expect(rule.nudge.endsWith(".")).toBe(true);
+    }
+  });
 });
 
 describe("signupSchema", () => {

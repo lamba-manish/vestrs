@@ -6,13 +6,34 @@
 import { z } from "zod";
 
 export const PASSWORD_RULES = [
-  { id: "len", label: "12+ characters", test: (p: string) => p.length >= 12 },
-  { id: "lower", label: "Lowercase letter", test: (p: string) => /[a-z]/.test(p) },
-  { id: "upper", label: "Uppercase letter", test: (p: string) => /[A-Z]/.test(p) },
-  { id: "digit", label: "Digit", test: (p: string) => /\d/.test(p) },
+  {
+    id: "len",
+    label: "12+ characters",
+    nudge: "Use at least 12 characters.",
+    test: (p: string) => p.length >= 12,
+  },
+  {
+    id: "lower",
+    label: "Lowercase letter",
+    nudge: "Add a lowercase letter.",
+    test: (p: string) => /[a-z]/.test(p),
+  },
+  {
+    id: "upper",
+    label: "Uppercase letter",
+    nudge: "Add an uppercase letter.",
+    test: (p: string) => /[A-Z]/.test(p),
+  },
+  {
+    id: "digit",
+    label: "Digit",
+    nudge: "Add a digit.",
+    test: (p: string) => /\d/.test(p),
+  },
   {
     id: "symbol",
     label: "Symbol",
+    nudge: "Add a symbol (e.g. !@#).",
     test: (p: string) => /[^A-Za-z0-9]/.test(p),
   },
 ] as const;
@@ -23,10 +44,7 @@ const strongPassword = z
   .superRefine((value, ctx) => {
     for (const rule of PASSWORD_RULES) {
       if (!rule.test(value)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Missing: ${rule.label.toLowerCase()}.`,
-        });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: rule.nudge });
         return;
       }
     }
