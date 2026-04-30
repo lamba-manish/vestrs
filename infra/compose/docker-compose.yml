@@ -86,14 +86,14 @@ services:
       target: dev
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
-      NEXT_PUBLIC_APP_ENV: local
+      VITE_API_URL: http://localhost:8000
+      VITE_APP_ENV: local
     ports:
       - "3000:3000"
     volumes:
       - ../../apps/web:/app
       - web-node-modules:/app/node_modules
-      - web-next-cache:/app/.next
+      - web-vite-cache:/app/node_modules/.vite
     depends_on:
       - api
 
@@ -101,4 +101,4 @@ volumes:
   postgres-data:
   redis-data:
   web-node-modules:
-  web-next-cache:
+  web-vite-cache:

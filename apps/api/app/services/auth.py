@@ -104,8 +104,11 @@ class AuthService:
 
     async def login(self, *, email: str, password: str, ctx: RequestContext) -> AuthResult:
         user = await self.users.get_by_email(email)
-        # Constant-ish work even on miss: hash a dummy password so timing
-        # doesn't reveal whether the email exists.
+        # Constant-ish work even on miss (verify against a sentinel hash) so
+        # response timing doesn't leak whether the email exists. Both
+        # failure paths return the same AUTH_INVALID_CREDENTIALS code to
+        # prevent user enumeration via the login form. The audit log keeps
+        # the specific reason internally.
         if user is None:
             verify_password(password, _DUMMY_HASH)
             await AuditLogRepository.write_independent(

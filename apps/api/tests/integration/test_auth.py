@@ -81,6 +81,7 @@ async def test_login_wrong_password_401(client: AsyncClient, db_session: AsyncSe
     client.cookies.clear()
     r = await client.post("/api/v1/auth/login", json={"email": EMAIL, "password": "wrong"})
     assert r.status_code == 401
+    # Same code for both unknown-email and wrong-password — no enumeration.
     assert r.json()["error"]["code"] == "AUTH_INVALID_CREDENTIALS"
 
 

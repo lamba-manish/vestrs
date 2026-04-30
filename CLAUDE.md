@@ -16,13 +16,14 @@ interfaces. Real vendors swap in by replacing the adapter, never the caller.
 - **Backend**: Python 3.12, FastAPI (async), SQLAlchemy 2 async, Alembic,
   Pydantic v2, structlog, ARQ (Redis-backed worker). **`uv` is the only
   package manager** — never `pip`, `poetry`, or `pipenv`.
-- **Frontend**: Next.js 15 (App Router), TypeScript (strict), Tailwind,
-  shadcn/ui, React Hook Form + Zod, TanStack Query.
-  Built as **static export** (`output: 'export'`) — Caddy serves it as
-  static files; no Node server in production. SSR/server actions are
-  forbidden in this codebase. If you need server-only logic later, raise
-  it; we'll either move it to FastAPI or switch the build mode in a
-  dedicated PR.
+- **Frontend**: Vite 5 + React 19 + react-router-dom 7 SPA, TypeScript
+  (strict), Tailwind, shadcn/ui-style primitives over Radix, React Hook
+  Form + Zod, TanStack Query, Sonner, framer-motion. Built to a static
+  `dist/` bundle that Caddy serves directly. No SSR, no Node runtime in
+  production — pure static SPA. (We started on Next.js but the Next 15 +
+  React 19 + standalone build hit an unworkable upstream bug in the
+  synthesised /404 prerender; Vite is simpler and avoids the entire
+  prerender concern for an authenticated SPA.)
 - **Data**: PostgreSQL 16, Redis 7.
 - **Container**: Docker multi-stage, docker-compose.
 - **Reverse proxy / TLS**: Caddy (auto-TLS via Let's Encrypt) on every env
@@ -264,6 +265,21 @@ Rules:
   `Secure=true, SameSite=Strict`.
 - Passwords hashed with **argon2id** (`argon2-cffi`), parameters in config.
 - Logout revokes the current refresh family.
+
+**Login failures return a single vague code** — `AUTH_INVALID_CREDENTIALS`
+("Invalid email or password.") — for both unknown-email and wrong-password
+cases, by design. Distinguishing the two would let an attacker probe
+registration state from the login form, exposing which HNW emails are
+Vestrs clients. Standard practice for finance (Stripe, Coinbase, Schwab).
+The audit log records the specific reason internally so support can still
+diagnose. Constant-ish work on miss (verify against a sentinel argon2 hash)
+keeps response-time leaks closed too.
+
+**Frontend never echoes raw `error.message` or `request_id` to users.**
+All toast / inline copy goes through `apps/web/src/lib/error-messages.ts`,
+which maps stable `error.code` values to user-friendly strings. The
+`request_id` is logged to the browser console for support correlation
+only.
 
 ## 9. Audit log schema
 
