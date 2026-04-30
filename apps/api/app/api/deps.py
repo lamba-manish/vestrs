@@ -26,6 +26,7 @@ from uuid import UUID
 from fastapi import Cookie, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.kyc import KycProvider, MockKycAdapter
 from app.core.errors import DomainError, ErrorCode, ForbiddenError
 from app.core.security import (
     ACCESS_COOKIE,
@@ -37,9 +38,11 @@ from app.core.security import (
 from app.db.session import get_session
 from app.models.user import User
 from app.repositories.audit_logs import AuditLogRepository
+from app.repositories.kyc import KycRepository
 from app.repositories.refresh_tokens import RefreshTokenRepository
 from app.repositories.users import UserRepository
 from app.services.auth import AuthService, RequestContext
+from app.services.kyc import KycService
 from app.services.users import UserService
 
 # ---- DB session -----------------------------------------------------------
@@ -95,6 +98,33 @@ def user_service(session: SessionDep) -> UserService:
 
 
 UserServiceDep = Annotated[UserService, Depends(user_service)]
+
+
+# ---- KYC adapter (process-singleton) + service ----------------------------
+#
+# The mock adapter holds in-memory state (the pending registry) so it must be
+# a singleton per process. Real adapters (Shufti / Plaid) are stateless HTTP
+# clients and the same DI shape works for them too.
+
+_kyc_provider: KycProvider = MockKycAdapter()
+
+
+def kyc_provider() -> KycProvider:
+    return _kyc_provider
+
+
+def kyc_service(
+    session: SessionDep, provider: Annotated[KycProvider, Depends(kyc_provider)]
+) -> KycService:
+    return KycService(
+        kyc=KycRepository(session),
+        audit=AuditLogRepository(session),
+        provider=provider,
+    )
+
+
+KycProviderDep = Annotated[KycProvider, Depends(kyc_provider)]
+KycServiceDep = Annotated[KycService, Depends(kyc_service)]
 
 
 # ---- token-derived caller (no DB hit) -------------------------------------
