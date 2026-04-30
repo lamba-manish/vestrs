@@ -2,8 +2,7 @@
 
 FROM node:22-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm \
-    PATH=/pnpm:$PATH \
-    NEXT_TELEMETRY_DISABLED=1
+    PATH=/pnpm:$PATH
 RUN corepack enable
 
 # ---------- deps ----------
@@ -22,7 +21,7 @@ COPY . .
 EXPOSE 3000
 CMD ["pnpm", "dev"]
 
-# ---------- builder (produces /app/out static bundle for production) ----------
+# ---------- builder (vite -> dist/) ----------
 FROM base AS builder
 WORKDIR /app
 ENV NODE_ENV=production
@@ -30,6 +29,6 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm build
 
-# ---------- export (deploy script copies /export/out to the Caddy volume) ----------
+# ---------- export (deploy script copies /export/dist into the Caddy volume) ----------
 FROM scratch AS export
-COPY --from=builder /app/out /out
+COPY --from=builder /app/dist /dist
