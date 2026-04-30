@@ -1,0 +1,143 @@
+name: E2E
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  playwright:
+    name: playwright · happy-path + kyc-failure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    # Playwright runner image: browsers preinstalled, security-patched
+    # by Microsoft. Pinning the minor matches the @playwright/test
+    # version in apps/web/package.json — bump both together.
+    container:
+      image: mcr.microsoft.com/playwright:v1.49.1-noble
+      options: --user 0
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: vestrs
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: vestrs
+        options: >-
+          --health-cmd "pg_isready -U vestrs -d vestrs"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      # API talks to the service containers by hostname (the runner
+      # container is on the same network).
+      APP_ENV: local
+      DATABASE_URL: postgresql+asyncpg://vestrs:ci_password@postgres:5432/vestrs
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ci_jwt_secret_only_used_for_tests
+      ACCREDITATION_RESOLUTION_DELAY_SECONDS: "2"
+      CORS_ALLOW_ORIGINS: http://localhost:3000
+      API_HOST: 0.0.0.0
+      API_PORT: "8000"
+      E2E_BASE_URL: http://localhost:3000
+      E2E_API_URL: http://localhost:8000
+      VITE_API_URL: http://localhost:8000
+      VITE_APP_ENV: local
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- backend (uv) ----
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/0.5.6/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: Install api deps
+        working-directory: apps/api
+        run: |
+          uv python install 3.12
+          uv sync --frozen
+      - name: Run alembic migrations
+        working-directory: apps/api
+        run: uv run alembic upgrade head
+      - name: Start FastAPI + ARQ worker
+        working-directory: apps/api
+        run: |
+          uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 \
+            > /tmp/api.log 2>&1 &
+          echo $! > /tmp/api.pid
+          uv run arq app.workers.WorkerSettings \
+            > /tmp/worker.log 2>&1 &
+          echo $! > /tmp/worker.pid
+
+      # ---- frontend (pnpm) ----
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - name: Install web deps
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+      - name: Start vite dev server
+        working-directory: apps/web
+        run: |
+          pnpm dev > /tmp/web.log 2>&1 &
+          echo $! > /tmp/web.pid
+
+      - name: Wait for stack
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:8000/healthz > /dev/null \
+               && curl -fsS http://localhost:3000 > /dev/null; then
+              echo "stack ready (i=$i)"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "stack didn't come up — dumping logs"
+          tail -200 /tmp/api.log /tmp/worker.log /tmp/web.log || true
+          exit 1
+
+      - name: Run Playwright
+        working-directory: apps/web
+        run: pnpm e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 14
+
+      - name: Upload Playwright traces + videos
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: apps/web/test-results/
+          retention-days: 14
+
+      - name: Stack logs (always)
+        if: always()
+        run: |
+          echo "=== api.log ==="
+          tail -200 /tmp/api.log || true
+          echo "=== worker.log ==="
+          tail -200 /tmp/worker.log || true
+          echo "=== web.log ==="
+          tail -200 /tmp/web.log || true
