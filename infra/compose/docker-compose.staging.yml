@@ -79,6 +79,9 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       api: { condition: service_started }
+    # See docker-compose.production.yml worker comment.
+    healthcheck:
+      disable: true
 
   # One-shot — copies the prebuilt static bundle from the web image's
   # /app/dist into a named volume that Caddy serves. Exits 0 on success;
