@@ -34,6 +34,7 @@ from app.adapters.bank import BankProvider, MockBankAdapter
 from app.adapters.kyc import KycProvider, MockKycAdapter
 from app.core.config import Settings, get_settings
 from app.core.errors import DomainError, ErrorCode, ForbiddenError
+from app.core.idempotency import IdempotencyStore
 from app.core.security import (
     ACCESS_COOKIE,
     REFRESH_COOKIE,
@@ -46,12 +47,14 @@ from app.models.user import User
 from app.repositories.accreditation import AccreditationRepository
 from app.repositories.audit_logs import AuditLogRepository
 from app.repositories.bank import BankRepository
+from app.repositories.investments import InvestmentRepository
 from app.repositories.kyc import KycRepository
 from app.repositories.refresh_tokens import RefreshTokenRepository
 from app.repositories.users import UserRepository
 from app.services.accreditation import AccreditationService
 from app.services.auth import AuthService, RequestContext
 from app.services.bank import BankService
+from app.services.investments import InvestmentService
 from app.services.kyc import KycService
 from app.services.users import UserService
 
@@ -189,6 +192,29 @@ def bank_service(
 
 BankProviderDep = Annotated[BankProvider, Depends(bank_provider)]
 BankServiceDep = Annotated[BankService, Depends(bank_service)]
+
+
+# ---- Investment service + idempotency store ------------------------------
+
+_idempotency_store: IdempotencyStore = IdempotencyStore()
+
+
+def idempotency_store() -> IdempotencyStore:
+    return _idempotency_store
+
+
+def investment_service(session: SessionDep) -> InvestmentService:
+    return InvestmentService(
+        investments=InvestmentRepository(session),
+        bank=BankRepository(session),
+        kyc=KycRepository(session),
+        accreditation=AccreditationRepository(session),
+        audit=AuditLogRepository(session),
+    )
+
+
+IdempotencyStoreDep = Annotated[IdempotencyStore, Depends(idempotency_store)]
+InvestmentServiceDep = Annotated[InvestmentService, Depends(investment_service)]
 
 
 # ---- token-derived caller (no DB hit) -------------------------------------
