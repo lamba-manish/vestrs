@@ -92,13 +92,21 @@ async def app(monkeypatch: pytest.MonkeyPatch, _migrated_db_url: str) -> FastAPI
     db_mod._session_factory = None
     deps_mod._accreditation_provider = MockAccreditationAdapter()
 
+    # The IdempotencyStore singleton holds a Redis client bound to the
+    # import-time loop; recreate per test for the same loop-safety reason as
+    # the accreditation adapter.
+    from app.core.idempotency import IdempotencyStore
+
+    deps_mod._idempotency_store = IdempotencyStore()
+
     # Wipe data + Redis between tests (schema stays; just truncate the rows).
     sync_engine = create_engine(_migrated_db_url, isolation_level="AUTOCOMMIT")
     with sync_engine.connect() as conn:
         conn.execute(
             text(
                 "TRUNCATE refresh_tokens, audit_logs, kyc_checks, "
-                "accreditation_checks, bank_accounts, users RESTART IDENTITY CASCADE"
+                "accreditation_checks, bank_accounts, investments, users "
+                "RESTART IDENTITY CASCADE"
             )
         )
     sync_engine.dispose()
