@@ -26,7 +26,12 @@ from uuid import UUID
 from fastapi import Cookie, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.accreditation import (
+    AccreditationProvider,
+    MockAccreditationAdapter,
+)
 from app.adapters.kyc import KycProvider, MockKycAdapter
+from app.core.config import Settings, get_settings
 from app.core.errors import DomainError, ErrorCode, ForbiddenError
 from app.core.security import (
     ACCESS_COOKIE,
@@ -37,10 +42,12 @@ from app.core.security import (
 )
 from app.db.session import get_session
 from app.models.user import User
+from app.repositories.accreditation import AccreditationRepository
 from app.repositories.audit_logs import AuditLogRepository
 from app.repositories.kyc import KycRepository
 from app.repositories.refresh_tokens import RefreshTokenRepository
 from app.repositories.users import UserRepository
+from app.services.accreditation import AccreditationService
 from app.services.auth import AuthService, RequestContext
 from app.services.kyc import KycService
 from app.services.users import UserService
@@ -125,6 +132,36 @@ def kyc_service(
 
 KycProviderDep = Annotated[KycProvider, Depends(kyc_provider)]
 KycServiceDep = Annotated[KycService, Depends(kyc_service)]
+
+
+# ---- Accreditation adapter (process-singleton) + service -----------------
+
+_accreditation_provider: AccreditationProvider = MockAccreditationAdapter()
+
+
+def accreditation_provider() -> AccreditationProvider:
+    return _accreditation_provider
+
+
+def settings_dep() -> Settings:
+    return get_settings()
+
+
+def accreditation_service(
+    session: SessionDep,
+    provider: Annotated[AccreditationProvider, Depends(accreditation_provider)],
+    settings: Annotated[Settings, Depends(settings_dep)],
+) -> AccreditationService:
+    return AccreditationService(
+        accreditation=AccreditationRepository(session),
+        audit=AuditLogRepository(session),
+        provider=provider,
+        settings=settings,
+    )
+
+
+AccreditationProviderDep = Annotated[AccreditationProvider, Depends(accreditation_provider)]
+AccreditationServiceDep = Annotated[AccreditationService, Depends(accreditation_service)]
 
 
 # ---- token-derived caller (no DB hit) -------------------------------------
