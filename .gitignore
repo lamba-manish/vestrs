@@ -56,3 +56,12 @@ secrets/
 
 # Local Claude scratch
 .claude/local/
+
+# Terraform transient files
+**/.terraform/
+**/.terraform.lock.hcl
+**/terraform.tfvars
+*.tfstate
+*.tfstate.backup
+crash.log
+crash.*.log

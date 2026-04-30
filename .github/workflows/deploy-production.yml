@@ -1,0 +1,109 @@
+name: Deploy · production
+
+on:
+  push:
+    branches: [release/production]
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+    branches: [release/production]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  approval-then-ssm:
+    name: ssm · run deploy.sh on production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    # The `production` GitHub Environment must be configured in repo
+    # settings with a required-reviewer (you). The job pauses here
+    # until that reviewer approves — that's the manual gate for prod.
+    environment:
+      name: production
+      url: https://vestrs.manishlamba.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_PRODUCTION }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-south-1' }}
+          role-session-name: gha-deploy-prod-${{ github.run_id }}
+
+      - name: Trigger SSM RunCommand → deploy.sh production
+        id: send
+        env:
+          INSTANCE_ID: ${{ vars.AWS_INSTANCE_ID_PRODUCTION }}
+          REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          CMD=$(aws ssm send-command \
+            --region "$REGION" \
+            --document-name "AWS-RunShellScript" \
+            --instance-ids "$INSTANCE_ID" \
+            --comment "vestrs-production deploy ${GIT_SHA::7} (run ${GITHUB_RUN_ID})" \
+            --cloud-watch-output-config CloudWatchOutputEnabled=true,CloudWatchLogGroupName=/vestrs/production/deploy \
+            --parameters '{
+              "commands": [
+                "set -euo pipefail",
+                "cd /opt/vestrs",
+                "sudo -u deploy git fetch --depth=1 origin release/production",
+                "sudo -u deploy git reset --hard FETCH_HEAD",
+                "sudo -u deploy bash infra/scripts/deploy.sh production"
+              ],
+              "executionTimeout": ["600"]
+            }' \
+            --query 'Command.CommandId' --output text)
+          echo "command_id=$CMD" >> "$GITHUB_OUTPUT"
+          echo "::notice title=SSM CommandId::$CMD"
+
+      - name: Wait for SSM command to finish
+        env:
+          INSTANCE_ID: ${{ vars.AWS_INSTANCE_ID_PRODUCTION }}
+          REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+          CMD: ${{ steps.send.outputs.command_id }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            sleep 10
+            STATUS=$(aws ssm get-command-invocation \
+              --region "$REGION" \
+              --command-id "$CMD" \
+              --instance-id "$INSTANCE_ID" \
+              --query 'Status' --output text || echo "Pending")
+            echo "[$i] status: $STATUS"
+            case "$STATUS" in
+              Success) exit 0 ;;
+              Failed|Cancelled|TimedOut)
+                echo "::error::SSM command finished with $STATUS"
+                aws ssm get-command-invocation \
+                  --region "$REGION" --command-id "$CMD" --instance-id "$INSTANCE_ID" \
+                  --query '{stdout:StandardOutputContent,stderr:StandardErrorContent}' \
+                  --output json
+                exit 1 ;;
+            esac
+          done
+          echo "::error::SSM command timed out after 10m"
+          exit 1
+
+      - name: Smoke test public endpoint
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS https://api.vestrs.manishlamba.com/healthz > /dev/null; then
+              echo "::notice title=production /healthz::ok"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::production /healthz never came back ok"
+          exit 1
