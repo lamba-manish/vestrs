@@ -47,6 +47,9 @@ export function TopNav() {
                 <DropdownMenuItem asChild>
                   <Link to="/dashboard">Dashboard</Link>
                 </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/audit">Audit log</Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onSelect={(e) => {
