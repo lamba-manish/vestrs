@@ -22,6 +22,7 @@ dev = [
     "ruff>=0.7",
     "black>=24.10",
     "mypy>=1.13",
+    "types-redis>=4.6",
 ]
 
 [tool.uv]
