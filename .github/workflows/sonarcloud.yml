@@ -20,9 +20,15 @@ jobs:
     name: SonarCloud scan
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    # Skip on forks (no access to SONAR_TOKEN). The CI job already
-    # gates code quality independently.
-    if: ${{ github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request' }}
+    # Skip on forks (no access to SONAR_TOKEN) and when SONAR_TOKEN
+    # isn't configured yet (so the workflow doesn't red-block PRs
+    # before the token has been added in repo settings).
+    if: >-
+      ${{
+        (github.event.pull_request.head.repo.full_name == github.repository ||
+         github.event_name != 'pull_request')
+        && vars.SONAR_ENABLED == 'true'
+      }}
     steps:
       - uses: actions/checkout@v4
         with:

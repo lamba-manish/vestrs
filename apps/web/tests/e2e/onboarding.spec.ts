@@ -22,7 +22,8 @@ test("happy path — onboard a new investor end-to-end", async ({ page }) => {
   // ---------- signup ----------
   await page.goto("/signup");
   await page.getByLabel(/email/i).fill(email);
-  await page.getByLabel(/password/i).fill(PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByLabel(/confirm password/i).fill(PASSWORD);
   await page.getByRole("button", { name: /open account|sign up|create/i }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole("heading", { name: /welcome/i })).toBeVisible();

@@ -27,7 +27,8 @@ test("kyc fail → renders reason + retry CTA", async ({ page }) => {
 
   await page.goto("/signup");
   await page.getByLabel(/email/i).fill(email);
-  await page.getByLabel(/password/i).fill(PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByLabel(/confirm password/i).fill(PASSWORD);
   await page.getByRole("button", { name: /open account|sign up|create/i }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 

@@ -180,6 +180,3 @@ jobs:
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
           load: true
-      - name: Save image digests
-        run: |
-          docker images vestrs-api:ci vestrs-web:ci --format '{{.Repository}}:{{.Tag}} {{.ID}}'
