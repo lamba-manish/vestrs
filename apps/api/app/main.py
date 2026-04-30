@@ -14,7 +14,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_fastapi_instrumentator import Instrumentator  # type: ignore[import-not-found]
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.v1 import api_router
 from app.core.config import get_settings
