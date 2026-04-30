@@ -58,7 +58,7 @@ jobs:
           load: true
           cache-from: type=gha,scope=${{ matrix.target.name }}
       - name: Trivy scan (HIGH+CRITICAL fail)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: vestrs-${{ matrix.target.name }}:scan
           format: table
@@ -70,7 +70,7 @@ jobs:
           scanners: vuln
       - name: Trivy SARIF for code-scanning
         if: always()
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: vestrs-${{ matrix.target.name }}:scan
           format: sarif
