@@ -104,10 +104,14 @@ jobs:
           cache-from: type=gha,scope=release-${{ matrix.image.name }}
           cache-to: type=gha,scope=release-${{ matrix.image.name }},mode=max
 
-      # Re-scan at release time. CI on the source PR has already
-      # scanned the same images, but base-image CVEs can land between
-      # PR merge and release; this gate is what publishes to the world.
+      # Re-scan at release time. We only scan the api image — the web
+      # image is the builder stage with node_modules/pnpm/playwright
+      # baked in (none of which run in production; the web-publish
+      # service only `cp`s /app/dist/. into a volume Caddy serves).
+      # Production-reachable web bytes are scanned by `trivy-web-dist`
+      # in security.yml on every PR.
       - name: Trivy scan (HIGH+CRITICAL fail)
+        if: matrix.image.name == 'api'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.tags.outputs.primary }}
