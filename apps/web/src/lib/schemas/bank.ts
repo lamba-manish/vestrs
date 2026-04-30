@@ -9,10 +9,27 @@ export const bankLinkFormSchema = z.object({
   currency: z
     .string()
     .trim()
-    .length(3, "ISO-4217 (e.g. USD).")
+    .length(3, "Pick a currency from the list.")
     .transform((v) => v.toUpperCase()),
 });
 export type BankLinkFormValues = z.infer<typeof bankLinkFormSchema>;
+
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  checking: "Checking",
+  savings: "Savings",
+  money_market: "Money market",
+};
+
+/** Human-readable form of `account_type` from the backend (e.g.
+ *  "money_market" → "Money market"). Falls back to title-casing for
+ *  unknown future values. */
+export function formatAccountType(raw: string): string {
+  if (raw in ACCOUNT_TYPE_LABELS) return ACCOUNT_TYPE_LABELS[raw];
+  return raw
+    .split("_")
+    .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w.toLowerCase()))
+    .join(" ");
+}
 
 export const bankAccountSchema = z.object({
   id: z.string().uuid(),

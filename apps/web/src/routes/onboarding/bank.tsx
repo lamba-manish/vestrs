@@ -1,20 +1,28 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, Loader2 } from "lucide-react";
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useMemo } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { useBankSummary, useLinkBank, useUnlinkBank } from "@/lib/bank";
+import { CURRENCIES, findCurrency } from "@/lib/currencies";
 import { userMessage } from "@/lib/error-messages";
-import { type BankLinkFormValues, bankLinkFormSchema } from "@/lib/schemas/bank";
+import { type BankLinkFormValues, bankLinkFormSchema, formatAccountType } from "@/lib/schemas/bank";
+
+const ACCOUNT_TYPE_OPTIONS: ComboboxOption[] = [
+  { value: "checking", label: "Checking", searchTokens: "checking" },
+  { value: "savings", label: "Savings", searchTokens: "savings" },
+  { value: "money_market", label: "Money market", searchTokens: "money market" },
+];
 
 export function BankPage() {
   useEffect(() => {
@@ -36,11 +44,35 @@ function BankContent() {
     handleSubmit,
     setError,
     reset,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<BankLinkFormValues>({
     resolver: zodResolver(bankLinkFormSchema),
     defaultValues: { account_type: "checking", currency: "USD" },
   });
+
+  const currencyOptions: ComboboxOption[] = useMemo(
+    () =>
+      CURRENCIES.map((c) => ({
+        value: c.code,
+        searchTokens: `${c.code} ${c.symbol} ${c.name}`,
+        label: (
+          <span className="flex items-center gap-2">
+            <span className="font-mono text-xs font-medium text-muted-foreground">{c.code}</span>
+            <span className="text-base">{c.symbol}</span>
+            <span>{c.name}</span>
+          </span>
+        ),
+        triggerLabel: (
+          <span className="flex items-center gap-2">
+            <span className="font-mono text-xs font-medium text-muted-foreground">{c.code}</span>
+            <span>{c.symbol}</span>
+            <span>{c.name}</span>
+          </span>
+        ),
+      })),
+    [],
+  );
 
   async function onSubmit(values: BankLinkFormValues) {
     try {
@@ -73,7 +105,7 @@ function BankContent() {
   }
 
   return (
-    <div className="container max-w-2xl py-10 sm:py-12">
+    <div className="container max-w-3xl py-10 sm:py-12">
       <Link
         to="/dashboard"
         className="mb-4 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
@@ -85,38 +117,11 @@ function BankContent() {
       {summary.isLoading ? (
         <Skeleton className="h-64 w-full" />
       ) : summary.data?.linked && summary.data.account ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Bank account linked</CardTitle>
-            <CardDescription>
-              We store masked details only. Plaintext numbers never reach the database.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <dl className="grid grid-cols-2 gap-4 text-sm">
-              <Pair k="Bank" v={summary.data.account.bank_name} />
-              <Pair
-                k="Account"
-                v={`••• ${summary.data.account.last_four} (${summary.data.account.account_type})`}
-              />
-              <Pair k="Currency" v={summary.data.account.currency} />
-              <Pair
-                k="Available"
-                v={`${summary.data.account.currency} ${summary.data.account.mock_balance}`}
-              />
-              <Pair k="Holder" v={summary.data.account.account_holder_name} />
-            </dl>
-            <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={onUnlink} disabled={unlink.isPending}>
-                {unlink.isPending && <Loader2 className="size-4 animate-spin" />}
-                Unlink
-              </Button>
-              <Button asChild>
-                <Link to="/onboarding/invest">Continue to investment</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <LinkedAccountCard
+          account={summary.data.account}
+          onUnlink={onUnlink}
+          unlinking={unlink.isPending}
+        />
       ) : (
         <Card>
           <CardHeader>
@@ -130,7 +135,7 @@ function BankContent() {
             <form
               noValidate
               onSubmit={handleSubmit(onSubmit)}
-              className="grid gap-4 sm:grid-cols-2"
+              className="grid gap-5 sm:grid-cols-2"
             >
               <FieldRow
                 label="Bank name"
@@ -144,26 +149,55 @@ function BankContent() {
                 error={errors.account_holder_name?.message}
                 {...register("account_holder_name")}
               />
+
               <div className="space-y-2">
                 <Label htmlFor="account_type">Account type</Label>
-                <select
-                  id="account_type"
-                  className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                  {...register("account_type")}
-                >
-                  <option value="checking">Checking</option>
-                  <option value="savings">Savings</option>
-                  <option value="money_market">Money market</option>
-                </select>
+                <Controller
+                  control={control}
+                  name="account_type"
+                  render={({ field }) => (
+                    <Combobox
+                      id="account_type"
+                      options={ACCOUNT_TYPE_OPTIONS}
+                      value={field.value}
+                      onChange={(v) => field.onChange(v as BankLinkFormValues["account_type"])}
+                      placeholder="Select account type…"
+                      searchPlaceholder="Search…"
+                      ariaInvalid={!!errors.account_type}
+                    />
+                  )}
+                />
+                {errors.account_type && (
+                  <p role="alert" className="text-xs text-destructive">
+                    {errors.account_type.message}
+                  </p>
+                )}
               </div>
-              <FieldRow
-                label="Currency (ISO-3)"
-                id="currency"
-                placeholder="USD"
-                maxLength={3}
-                error={errors.currency?.message}
-                {...register("currency")}
-              />
+
+              <div className="space-y-2">
+                <Label htmlFor="currency">Currency</Label>
+                <Controller
+                  control={control}
+                  name="currency"
+                  render={({ field }) => (
+                    <Combobox
+                      id="currency"
+                      options={currencyOptions}
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Select currency…"
+                      searchPlaceholder="Search by code, symbol, or name…"
+                      ariaInvalid={!!errors.currency}
+                    />
+                  )}
+                />
+                {errors.currency && (
+                  <p role="alert" className="text-xs text-destructive">
+                    {errors.currency.message}
+                  </p>
+                )}
+              </div>
+
               <FieldRow
                 label="Account number"
                 id="account_number"
@@ -193,6 +227,60 @@ function BankContent() {
         </Card>
       )}
     </div>
+  );
+}
+
+function LinkedAccountCard({
+  account,
+  onUnlink,
+  unlinking,
+}: {
+  account: {
+    bank_name: string;
+    account_holder_name: string;
+    account_type: string;
+    last_four: string;
+    currency: string;
+    mock_balance: string;
+  };
+  onUnlink: () => void;
+  unlinking: boolean;
+}) {
+  const currency = findCurrency(account.currency);
+  const balanceDisplay = currency
+    ? `${currency.symbol}${account.mock_balance} ${currency.code}`
+    : `${account.currency} ${account.mock_balance}`;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Bank account linked</CardTitle>
+        <CardDescription>
+          We store masked details only. Plaintext numbers never reach the database.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <dl className="grid grid-cols-2 gap-4 text-sm">
+          <Pair k="Bank" v={account.bank_name} />
+          <Pair k="Account" v={`••• ${account.last_four}`} />
+          <Pair k="Account type" v={formatAccountType(account.account_type)} />
+          <Pair
+            k="Currency"
+            v={currency ? `${currency.code} (${currency.symbol})` : account.currency}
+          />
+          <Pair k="Available" v={balanceDisplay} />
+          <Pair k="Holder" v={account.account_holder_name} />
+        </dl>
+        <div className="flex justify-end gap-3">
+          <Button variant="outline" onClick={onUnlink} disabled={unlinking}>
+            {unlinking && <Loader2 className="size-4 animate-spin" />}
+            Unlink
+          </Button>
+          <Button asChild>
+            <Link to="/onboarding/invest">Continue to investment</Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

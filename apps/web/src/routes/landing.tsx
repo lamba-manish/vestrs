@@ -1,8 +1,9 @@
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, LayoutDashboard, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useMe } from "@/lib/auth";
 
 const PILLARS = [
   {
@@ -20,6 +21,9 @@ const PILLARS = [
 ];
 
 export function LandingPage() {
+  const me = useMe();
+  const authed = !me.isLoading && me.data;
+
   return (
     <div className="container flex min-h-[calc(100dvh-8rem)] flex-col justify-center gap-8 py-6 sm:py-10">
       <section className="mx-auto max-w-3xl text-center">
@@ -28,22 +32,43 @@ export function LandingPage() {
           Private placement onboarding
         </p>
         <h1 className="font-serif-display text-3xl leading-tight tracking-tight sm:text-5xl">
-          Capital onboarding for <span className="text-primary">discerning investors.</span>
+          {authed ? (
+            <>
+              Welcome back, <span className="text-primary">{me.data!.email.split("@")[0]}.</span>
+            </>
+          ) : (
+            <>
+              Capital onboarding for <span className="text-primary">discerning investors.</span>
+            </>
+          )}
         </h1>
         <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground sm:text-base sm:leading-7">
-          Sign up, complete KYC and accreditation, link a bank, and place an investment — all in one
-          quiet, accountable flow.
+          {authed
+            ? "Pick up where you left off. Each step writes an audit entry; the entire flow is reviewable in your audit log."
+            : "Sign up, complete KYC and accreditation, link a bank, and place an investment — all in one quiet, accountable flow."}
         </p>
         <div className="mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Button asChild size="lg">
-            <Link to="/signup">
-              Open an account
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="lg">
-            <Link to="/login">Sign in</Link>
-          </Button>
+          {authed ? (
+            <Button asChild size="lg">
+              <Link to="/dashboard">
+                <LayoutDashboard className="size-4" />
+                Continue to dashboard
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+          ) : (
+            <>
+              <Button asChild size="lg">
+                <Link to="/signup">
+                  Open an account
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg">
+                <Link to="/login">Sign in</Link>
+              </Button>
+            </>
+          )}
         </div>
       </section>
 
