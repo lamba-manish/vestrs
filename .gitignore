@@ -1,0 +1,58 @@
+# Environment files (only .example variants are committed)
+.env
+.env.*
+!.env.*.example
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+.uv/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.pnpm-store/
+.turbo/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Docker / runtime
+*.log
+logs/
+postgres-data/
+redis-data/
+caddy-data/
+caddy-config/
+
+# Secrets
+*.pem
+*.key
+*.crt
+secrets/
+
+# Local Claude scratch
+.claude/local/

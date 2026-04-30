@@ -1,0 +1,82 @@
+# Local development stack.
+# Usage: from repo root, `make up`.
+
+name: vestrs
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vestrs}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_local}
+      POSTGRES_DB: ${POSTGRES_DB:-vestrs}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vestrs} -d ${POSTGRES_DB:-vestrs}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+      target: runtime
+    restart: unless-stopped
+    environment:
+      APP_ENV: local
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vestrs}:${POSTGRES_PASSWORD:-change_me_in_local}@postgres:5432/${POSTGRES_DB:-vestrs}
+      REDIS_URL: redis://redis:6379/0
+      CORS_ALLOW_ORIGINS: '["http://localhost:3000"]'
+      LOG_LEVEL: DEBUG
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+      target: dev
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_APP_ENV: local
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../../apps/web:/app
+      - web-node-modules:/app/node_modules
+      - web-next-cache:/app/.next
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
+  redis-data:
+  web-node-modules:
+  web-next-cache:

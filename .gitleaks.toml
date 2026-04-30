@@ -1,0 +1,25 @@
+# Gitleaks configuration — extends the default rule set.
+# https://github.com/gitleaks/gitleaks#configuration
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Files and paths that are allowed to contain placeholder secret-shaped strings."
+paths = [
+  '''(^|/)\.env\.[^/]+\.example$''',
+  '''(^|/)\.env\.example$''',
+  '''(^|/)CLAUDE\.md$''',
+  '''(^|/)README\.md$''',
+  '''(^|/)apps/api/tests/.*''',
+  '''(^|/)apps/web/tests/.*''',
+  '''(^|/)\.gitleaks\.toml$''',
+  '''(^|/)\.pre-commit-config\.yaml$''',
+]
+
+# Allow common placeholder values used in example envs and docs.
+regexes = [
+  '''change_me_in_local''',
+  '''__from_ssm__''',
+  '''CHANGE_ME''',
+]

@@ -1,0 +1,12 @@
+# Hadolint configuration. https://github.com/hadolint/hadolint
+ignored:
+  # DL3008 — Pin versions in apt-get install. Pinning Debian package versions
+  # causes builds to break unpredictably when packages roll forward in the
+  # repo; we trust Debian's stable channel + unattended-upgrades on the host.
+  - DL3008
+  # DL3013 — Pin versions in pip. We use uv with a committed uv.lock instead.
+  - DL3013
+
+trusted-registries:
+  - docker.io
+  - ghcr.io
