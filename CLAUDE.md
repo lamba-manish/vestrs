@@ -346,7 +346,36 @@ Quality:
 - `make gitleaks` — secret scan (host binary or docker fallback)
 - `trivy image vestrs-api:local` (lands in CI at slice 13)
 
-## 17. Branch model + push cadence
+## 17. Git identity (personal account on a multi-account Mac)
+
+This repo belongs to the **personal** GitHub account `lamba-manish`. The
+machine also hosts a work account; identities are kept apart by:
+
+- `~/.gitconfig` `includeIf "gitdir:/Users/manishTL/debian-ec2/vestrs/"` →
+  `~/.gitconfig-personal`.
+- SSH host alias `github.com-personal` in `~/.ssh/config` (the remote URL
+  is `git@github.com-personal:lamba-manish/vestrs.git`).
+
+**Author email rule:** the personal gmail address is marked private on
+GitHub, so pushing a commit authored with it is rejected with `GH007`.
+Commits in this repo **must** be authored with the noreply form:
+`43702786+lamba-manish@users.noreply.github.com`. This is set as the
+local repo `user.email` (`.git/config`) so it overrides any global
+`[user]` block. `~/.gitconfig-personal` should be updated at the user's
+discretion to use the same noreply email so other personal repos behave
+consistently.
+
+Before any push, verify:
+
+```bash
+git config user.email   # must end in @users.noreply.github.com
+git remote -v           # must use github.com-personal alias
+```
+
+Never use `git config --global` or edit `~/.gitconfig*` from this
+project's tasks.
+
+## 18. Branch model + push cadence
 
 Branches:
 
