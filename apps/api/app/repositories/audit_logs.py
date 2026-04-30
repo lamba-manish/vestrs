@@ -8,13 +8,18 @@ Audit writes for **failures** must persist even when the action's transaction
 rolls back (otherwise we lose the record that an attempt was made). Those go
 through ``write_independent`` which opens its own short-lived session and
 commits immediately.
+
+Reads use cursor pagination keyed on ``id`` (UUIDv6 → time-sortable, so
+``ORDER BY id DESC`` ≡ newest-first without needing the timestamp column).
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session_factory
@@ -78,6 +83,36 @@ class AuditLogRepository:
         self.session.add(entry)
         await self.session.flush()
         return entry
+
+    async def list_paginated(
+        self,
+        *,
+        user_id: UUID | None,
+        action: str | None,
+        since: datetime | None,
+        until: datetime | None,
+        before_id: UUID | None,
+        limit: int,
+    ) -> list[AuditLog]:
+        """Newest-first page of audit rows.
+
+        ``user_id=None`` means "every user" (admin-only at the route layer).
+        ``before_id`` is the cursor: only rows with ``id < before_id`` are
+        returned. ``limit`` is bounded by the route.
+        """
+        stmt = select(AuditLog).order_by(desc(AuditLog.id)).limit(limit)
+        if user_id is not None:
+            stmt = stmt.where(AuditLog.user_id == user_id)
+        if action is not None:
+            stmt = stmt.where(AuditLog.action == action)
+        if since is not None:
+            stmt = stmt.where(AuditLog.timestamp >= since)
+        if until is not None:
+            stmt = stmt.where(AuditLog.timestamp < until)
+        if before_id is not None:
+            stmt = stmt.where(AuditLog.id < before_id)
+        result = await self.session.execute(stmt)
+        return list(result.scalars())
 
     @staticmethod
     async def write_independent(
