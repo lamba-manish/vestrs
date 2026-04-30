@@ -78,19 +78,34 @@ async def app(monkeypatch: pytest.MonkeyPatch, _migrated_db_url: str) -> FastAPI
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/15")
     monkeypatch.setenv("JWT_SECRET", "test-secret-must-be-long-enough-for-hs256-32+chars")
 
-    # Reset module-level caches so the app picks up the new env.
+    # Reset module-level caches so the app picks up the new env. The
+    # MockAccreditationAdapter singleton holds an aioredis client bound to
+    # the loop it was first used on; pytest spins up a new loop per test, so
+    # we recreate the singleton here to stay loop-safe.
+    from app.adapters.accreditation import MockAccreditationAdapter
+    from app.api import deps as deps_mod
     from app.core import config as cfg_mod
     from app.db import session as db_mod
 
     cfg_mod.get_settings.cache_clear()
     db_mod._engine = None
     db_mod._session_factory = None
+    deps_mod._accreditation_provider = MockAccreditationAdapter()
 
-    # Wipe data between tests (schema stays; just truncate the rows).
+    # Wipe data + Redis between tests (schema stays; just truncate the rows).
     sync_engine = create_engine(_migrated_db_url, isolation_level="AUTOCOMMIT")
     with sync_engine.connect() as conn:
-        conn.execute(text("TRUNCATE refresh_tokens, audit_logs, users RESTART IDENTITY CASCADE"))
+        conn.execute(
+            text(
+                "TRUNCATE refresh_tokens, audit_logs, kyc_checks, "
+                "accreditation_checks, users RESTART IDENTITY CASCADE"
+            )
+        )
     sync_engine.dispose()
+
+    import redis
+
+    redis.Redis.from_url("redis://localhost:6379/15").flushdb()
 
     from app.main import app as fastapi_app
 

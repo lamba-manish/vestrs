@@ -56,6 +56,13 @@ class Settings(BaseSettings):
     # (correct for localhost in local).
     cookie_domain: str | None = None
 
+    # ---- accreditation ----
+    # Mock vendor's "review delay". 5 s in local / staging is enough to see
+    # the async flow without slowing tests; production overrides to 12-48 h
+    # via env. The arq job fires at ``submit_at + delay`` and resolves the
+    # pending check.
+    accreditation_resolution_delay_seconds: int = 5
+
     @field_validator("cors_allow_origins", mode="before")
     @classmethod
     def _split_cors_origins(cls, value: Any) -> Any:
