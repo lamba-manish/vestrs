@@ -77,6 +77,74 @@ describe("describeMetadata", () => {
       "Updated full name, phone",
     );
   });
+
+  it("renders idempotent investment replay", () => {
+    expect(describeMetadata("INVESTMENT_IDEMPOTENT_REPLAY", { key: "x" })).toBe(
+      "Same key + body — replayed cached response.",
+    );
+  });
+
+  it("renders KYC retry exhausted", () => {
+    expect(describeMetadata("KYC_RETRY_EXHAUSTED", { attempt: 3 })).toBe(
+      "All retry attempts used.",
+    );
+  });
+
+  it("formats ACCREDITATION_SUBMITTED with attempt", () => {
+    expect(describeMetadata("ACCREDITATION_SUBMITTED", { attempt: 1 })).toBe("attempt 1");
+    expect(describeMetadata("ACCREDITATION_SUBMITTED", { foo: "bar" })).toBeNull();
+  });
+
+  it("renders ACCREDITATION_RESOLVED failed without reason", () => {
+    expect(describeMetadata("ACCREDITATION_RESOLVED", { status: "failed" })).toBe(
+      "Not accredited.",
+    );
+    expect(describeMetadata("ACCREDITATION_RESOLVED", { status: "pending" })).toBeNull();
+  });
+
+  it("formats BANK_LINKED with bank only / null when bank missing", () => {
+    expect(describeMetadata("BANK_LINKED", { bank_name: "HSBC" })).toBe("HSBC");
+    expect(describeMetadata("BANK_LINKED", { last_four: "0001" })).toBeNull();
+  });
+
+  it("humanizes BANK_LINK_FAILED reason", () => {
+    expect(describeMetadata("BANK_LINK_FAILED", { reason: "account_not_found" })).toBe(
+      "Account not found",
+    );
+    expect(describeMetadata("BANK_LINK_FAILED", { foo: "bar" })).toBeNull();
+  });
+
+  it("humanizes AUTH_LOGIN_FAILED reason and AUTH_REFRESH_REUSE_DETECTED", () => {
+    expect(describeMetadata("AUTH_LOGIN_FAILED", { reason: "invalid_credentials" })).toBe(
+      "Invalid credentials",
+    );
+    expect(describeMetadata("AUTH_LOGIN_FAILED", { foo: "bar" })).toBeNull();
+    expect(describeMetadata("AUTH_REFRESH_REUSE_DETECTED", { jti: "abc" })).toBe(
+      "Token family revoked.",
+    );
+  });
+
+  it("returns null for KYC_SUBMITTED with no usable fields", () => {
+    expect(describeMetadata("KYC_SUBMITTED", { foo: "bar" })).toBeNull();
+  });
+
+  it("returns null for INVESTMENT_CREATED without amount or escrow", () => {
+    expect(describeMetadata("INVESTMENT_CREATED", { foo: "bar" })).toBeNull();
+    expect(describeMetadata("INVESTMENT_CREATED", { amount: "100" })).toBe("100");
+  });
+
+  it("returns null for INVESTMENT_BLOCKED with no reason", () => {
+    expect(describeMetadata("INVESTMENT_BLOCKED", { foo: "bar" })).toBeNull();
+  });
+
+  it("returns null for PROFILE_UPDATED without fields", () => {
+    expect(describeMetadata("PROFILE_UPDATED", { foo: "bar" })).toBeNull();
+    expect(describeMetadata("PROFILE_UPDATED", { fields: [] })).toBeNull();
+  });
+
+  it("returns null for unknown action codes (default branch)", () => {
+    expect(describeMetadata("SOME_NEW_FUTURE_ACTION", { foo: "bar" })).toBeNull();
+  });
 });
 
 describe("relativeTime", () => {
