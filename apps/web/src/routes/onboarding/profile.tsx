@@ -233,38 +233,53 @@ function ProfileContent() {
                   readers + Playwright `getByLabel(/phone/)` pick up the
                   whole field group. */}
               <Label htmlFor="phone_country">Phone</Label>
+              {/* Two independent columns each carrying their own error
+                  slot, so a "not a valid number" message renders under
+                  the number input rather than under the dial-code
+                  picker (the previous shared-error placement put the
+                  message in the wrong column for users typing in the
+                  number field). */}
               <div className="grid gap-3 sm:grid-cols-[200px_1fr]">
-                <Controller
-                  control={control}
-                  name="phone_country"
-                  render={({ field }) => (
-                    <Combobox
-                      id="phone_country"
-                      options={dialOptions}
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="Country code"
-                      searchPlaceholder="Search by country or +code…"
-                      ariaInvalid={!!errors.phone_country}
-                      contentClassName="w-[300px]"
-                    />
+                <div>
+                  <Controller
+                    control={control}
+                    name="phone_country"
+                    render={({ field }) => (
+                      <Combobox
+                        id="phone_country"
+                        options={dialOptions}
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Country code"
+                        searchPlaceholder="Search by country or +code…"
+                        ariaInvalid={!!errors.phone_country}
+                        contentClassName="w-[300px]"
+                      />
+                    )}
+                  />
+                  {errors.phone_country?.message && (
+                    <p role="alert" className="mt-1 text-xs text-destructive">
+                      {errors.phone_country.message}
+                    </p>
                   )}
-                />
-                <Input
-                  id="phone_number"
-                  type="tel"
-                  inputMode="tel"
-                  placeholder="9876543210"
-                  autoComplete="tel-national"
-                  aria-invalid={errors.phone_number ? "true" : "false"}
-                  {...register("phone_number")}
-                />
+                </div>
+                <div>
+                  <Input
+                    id="phone_number"
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="9876543210"
+                    autoComplete="tel-national"
+                    aria-invalid={errors.phone_number ? "true" : "false"}
+                    {...register("phone_number")}
+                  />
+                  {errors.phone_number?.message && (
+                    <p role="alert" className="mt-1 text-xs text-destructive">
+                      {errors.phone_number.message}
+                    </p>
+                  )}
+                </div>
               </div>
-              {(errors.phone_country || errors.phone_number) && (
-                <p role="alert" className="text-xs text-destructive">
-                  {errors.phone_country?.message ?? errors.phone_number?.message}
-                </p>
-              )}
             </div>
 
             <div className="flex justify-end gap-3 pt-2 sm:col-span-2">

@@ -68,103 +68,111 @@ function DashboardContent() {
         </p>
       </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Your steps</CardTitle>
-          <CardDescription>
-            Complete each in order. Steps unlock as the previous one finishes.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="space-y-3">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          ) : (
-            <ol className="divide-y divide-border">
-              <StepRow
-                index={1}
-                title="Complete your profile"
-                description="Name, nationality, country of residence, contact phone."
-                status={state.profile}
-                to="/onboarding/profile"
-                enabled
-                actionLabel={nextActionLabel(state.profile)}
-              />
-              <StepRow
-                index={2}
-                title="Verify your identity (KYC)"
-                description="Identity, liveness, and AML screening through our verification provider."
-                status={state.kyc}
-                to="/onboarding/kyc"
-                enabled={profileDone}
-                actionLabel={nextActionLabel(state.kyc)}
-              />
-              <StepRow
-                index={3}
-                title="Accreditation review"
-                description="Asynchronous review against accredited-investor criteria."
-                status={state.accreditation}
-                to="/onboarding/accreditation"
-                enabled={kycDone}
-                actionLabel={nextActionLabel(state.accreditation)}
-              />
-              <StepRow
-                index={4}
-                title="Link a bank account"
-                description="We persist masked details only — last four, currency, balance estimate."
-                status={state.bank}
-                to="/onboarding/bank"
-                enabled={accDone}
-                actionLabel={nextActionLabel(state.bank)}
-              />
-              <StepRow
-                index={5}
-                title="Place your first investment"
-                description="Funds routed to a regulated escrow / law-firm pooling account."
-                status={state.invest}
-                to="/onboarding/invest"
-                enabled={bankDone}
-                actionLabel={nextActionLabel(state.invest)}
-              />
-            </ol>
-          )}
-        </CardContent>
-      </Card>
+      {/*
+        Desktop layout (slice 31): two columns above lg — steps on the
+        left at 7/12, recent activity on the right at 5/12. Mobile and
+        tablet stay stacked. Items-start so the sidebar doesn't stretch
+        when the steps card is taller.
+      */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
+        <Card className="lg:col-span-7">
+          <CardHeader>
+            <CardTitle>Your steps</CardTitle>
+            <CardDescription>
+              Complete each in order. Steps unlock as the previous one finishes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="space-y-3">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            ) : (
+              <ol className="divide-y divide-border">
+                <StepRow
+                  index={1}
+                  title="Complete your profile"
+                  description="Name, nationality, country of residence, contact phone."
+                  status={state.profile}
+                  to="/onboarding/profile"
+                  enabled
+                  actionLabel={nextActionLabel(state.profile)}
+                />
+                <StepRow
+                  index={2}
+                  title="Verify your identity (KYC)"
+                  description="Identity, liveness, and AML screening through our verification provider."
+                  status={state.kyc}
+                  to="/onboarding/kyc"
+                  enabled={profileDone}
+                  actionLabel={nextActionLabel(state.kyc)}
+                />
+                <StepRow
+                  index={3}
+                  title="Accreditation review"
+                  description="Asynchronous review against accredited-investor criteria."
+                  status={state.accreditation}
+                  to="/onboarding/accreditation"
+                  enabled={kycDone}
+                  actionLabel={nextActionLabel(state.accreditation)}
+                />
+                <StepRow
+                  index={4}
+                  title="Link a bank account"
+                  description="We persist masked details only — last four, currency, balance estimate."
+                  status={state.bank}
+                  to="/onboarding/bank"
+                  enabled={accDone}
+                  actionLabel={nextActionLabel(state.bank)}
+                />
+                <StepRow
+                  index={5}
+                  title="Place your first investment"
+                  description="Funds routed to a regulated escrow / law-firm pooling account."
+                  status={state.invest}
+                  to="/onboarding/invest"
+                  enabled={bankDone}
+                  actionLabel={nextActionLabel(state.invest)}
+                />
+              </ol>
+            )}
+          </CardContent>
+        </Card>
 
-      <Card className="mt-6">
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-          <div>
-            <CardTitle>Recent activity</CardTitle>
-            <CardDescription>Last few audit entries from your onboarding flow.</CardDescription>
-          </div>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/audit">
-              Full log
-              <ArrowRight className="size-3.5" aria-hidden="true" />
-            </Link>
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {audit.isLoading ? (
-            <div className="space-y-2">
-              {[0, 1, 2].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
+        <Card className="lg:col-span-5 lg:sticky lg:top-6">
+          <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+            <div>
+              <CardTitle>Recent activity</CardTitle>
+              <CardDescription>Last few audit entries from your onboarding flow.</CardDescription>
             </div>
-          ) : recent.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">No activity yet.</p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {recent.map((entry) => (
-                <AuditRow key={entry.id} entry={entry} />
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/audit">
+                Full log
+                <ArrowRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {audit.isLoading ? (
+              <div className="space-y-2">
+                {[0, 1, 2].map((i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : recent.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No activity yet.</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {recent.map((entry) => (
+                  <AuditRow key={entry.id} entry={entry} />
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

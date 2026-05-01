@@ -78,8 +78,21 @@ export function Combobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          aria-haspopup="listbox"
           aria-invalid={ariaInvalid ? "true" : undefined}
           disabled={disabled}
+          // WAI-ARIA combobox keyboard contract: a focused trigger
+          // should open the popover on ArrowDown / ArrowUp / Alt+ArrowDown
+          // in addition to Enter / Space (Radix Button gives us those
+          // for free). Without this, Tab-into-then-arrow does nothing,
+          // which is what users complained about.
+          onKeyDown={(e) => {
+            if (open) return;
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              setOpen(true);
+            }
+          }}
           className={cn(
             "h-11 w-full justify-between font-normal text-foreground",
             !selected && "text-muted-foreground",

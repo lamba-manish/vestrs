@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccreditationSummary, useSubmitAccreditation } from "@/lib/accreditation";
 import { ApiError } from "@/lib/api";
+import { formatAccreditationPath, formatFailureReason } from "@/lib/audit-format";
 import { userMessage } from "@/lib/error-messages";
 import {
   type AccreditationSubmitValues,
@@ -124,8 +125,9 @@ function PathPicker({ previousFailure }: { previousFailure?: string | null }) {
     <div className="space-y-4">
       {previousFailure && (
         <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs leading-5 text-destructive">
-          Previous attempt failed: <span className="font-medium">{previousFailure}</span>. Try
-          another path or correct the data and resubmit.
+          Previous attempt failed:{" "}
+          <span className="font-medium">{formatFailureReason(previousFailure)}</span>. Try another
+          path or correct the data and resubmit.
         </div>
       )}
       <div role="radiogroup" aria-label="Accreditation path" className="grid gap-3">
@@ -176,7 +178,10 @@ function StatusBlock({
       {status === "pending" && (
         <span className="inline-flex items-center gap-2">
           <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
-          <span>Reviewing your accreditation… (path: {path ?? "unknown"})</span>
+          <span>
+            Reviewing your accreditation
+            {path ? ` (${formatAccreditationPath(path)})` : ""}…
+          </span>
         </span>
       )}
       {status === "success" && (
@@ -184,10 +189,14 @@ function StatusBlock({
           <div>
             <p>You've been verified as an accredited investor.</p>
             {path && (
-              <p className="mt-0.5 text-xs text-muted-foreground">Verified via the {path} test.</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Verified via the {formatAccreditationPath(path).toLowerCase()}.
+              </p>
             )}
             {failureReason && (
-              <p className="mt-1 text-xs text-muted-foreground">Notes: {failureReason}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Notes: {formatFailureReason(failureReason)}
+              </p>
             )}
           </div>
           <Button asChild>
