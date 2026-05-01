@@ -662,6 +662,18 @@ observed).
   Switching to the cloud agent (when free Grafana Cloud quota is
   available) is a one-line `COMPOSE_PROFILES=cloud-obs` flip plus
   filling in the `GRAFANA_CLOUD_*` env vars.
+- **Logs**: Loki + Promtail run on-box (slice 24). Promtail tails the
+  docker socket and ships every container's stdout/stderr to Loki,
+  labelled `stack`/`service`/`container`/`stream`. 7-day retention,
+  filesystem-backed. Available as the `Loki` datasource in Grafana
+  with UID `vestrs-loki`.
+- **Alerting**: Alertmanager runs on-box (slice 25), receives alerts
+  from Prometheus via `static_configs`, routes to a single Gmail
+  receiver (`manishlamba002@gmail.com`). SMTP creds come from SSM
+  (`/vestrs/production/ALERTMANAGER_SMTP_PASSWORD` — must be a Google
+  App Password, not the account password). One canary rule
+  `AlertingPipelineSmokeTest` fires constantly so the pipeline can be
+  verified end-to-end on first deploy; delete it once confirmed.
 
 ## 16. Operating principles
 
