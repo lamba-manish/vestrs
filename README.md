@@ -8,8 +8,15 @@ action writes a same-transaction audit row, and the whole stack lives
 on a single AWS EC2 box behind Caddy + Let's Encrypt.
 
 > **Live**: https://vestrs.manishlamba.com — try a signup; the demo
-> mock-vendors resolve in seconds. API health: https://api.vestrs.manishlamba.com/healthz.
-> Docs: https://api.vestrs.manishlamba.com/docs.
+> mock-vendors resolve in seconds.
+>
+> | | |
+> |---|---|
+> | Web | <https://vestrs.manishlamba.com> |
+> | API health | <https://api.vestrs.manishlamba.com/healthz> (real readiness probe — `SELECT 1` + `PING`) |
+> | API docs | <https://api.vestrs.manishlamba.com/docs> |
+> | Monitoring | <https://monitoring.vestrs.manishlamba.com> (self-hosted Grafana + Prometheus + Loki, slice 23–25) |
+> | GitHub | <https://github.com/lamba-manish/vestrs> |
 >
 > The site is provisioned for a one-week evaluation window and then
 > torn down.
@@ -140,15 +147,23 @@ Stop with `make down`. Reset volumes with `make clean` (destroys local DB).
 
 ## Documentation
 
+- **[docs/ASSIGNMENT.md](docs/ASSIGNMENT.md)** — the original brief
+  mapped to the implementation, plus the hidden requirements caught
+  from a careful read (SEC's three accreditation paths, "cross-border"
+  domicile capture, escrow vs pooling reference).
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — request flow,
   data model, adapter pattern, slice journal, performance budget.
+- **[docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md)** — local → staging →
+  production matrix; full commit-to-deploy stage flow.
+- **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — CI/CD pipeline,
+  approval chain, rollback, smoke verification.
 - **[docs/SECURITY.md](docs/SECURITY.md)** — auth model, audit log
   shape, secrets management, security headers, CVE policy.
 - **[docs/RUNBOOK.md](docs/RUNBOOK.md)** — bootstrap-from-zero AWS
   deploy, observability bring-up, disaster recovery.
-- **[CLAUDE.md](CLAUDE.md)** — project conventions (response envelope,
-  env matrix, error codes, branch model). Also the source-of-truth
-  document the AI pair-programmer reads at the start of every session.
+- **[docs/ROADMAP.md](docs/ROADMAP.md)** — explicit out-of-scope +
+  good-to-have / TODO. The honest list of what's intentionally
+  deferred and what real production would need.
 
 ---
 
