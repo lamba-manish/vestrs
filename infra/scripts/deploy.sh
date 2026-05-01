@@ -31,6 +31,44 @@ case "$ENV_NAME" in
   *) echo "deploy.sh: unknown env '$ENV_NAME' (expected staging|production)" >&2; exit 2 ;;
 esac
 
+# ----------------------------------------------------------------------
+# Production-deploy lockdown
+#
+# Production deploys MUST originate from the GHA `Deploy · production`
+# workflow, which itself requires:
+#   - a PR review on `main`
+#   - a fast-forward push to `release/production`
+#   - a successful Release workflow (image build + GHCR push)
+#   - a manual approval at the `production` GitHub Environment
+# A human running `bash deploy.sh production` from a Session-Manager
+# shell would skip every one of those gates. Refuse unless the GHA
+# SSM SendCommand path passes a token we plant on the runner.
+#
+# Override paths (intentional, narrow):
+#   VESTRS_ALLOW_LOCAL_PROD_DEPLOY=1  — explicit operator override for
+#                                       break-glass scenarios. Use with
+#                                       caution; logs the override.
+#   ENV_NAME != production            — staging stays manual-friendly.
+# ----------------------------------------------------------------------
+if [[ "$ENV_NAME" == "production" ]]; then
+  if [[ -z "${VESTRS_DEPLOY_TOKEN:-}" ]]; then
+    if [[ "${VESTRS_ALLOW_LOCAL_PROD_DEPLOY:-0}" != "1" ]]; then
+      cat >&2 <<'GUARD'
+deploy.sh: production deploys must come from the GHA "Deploy · production"
+workflow (PR review → release/production push → manual approval at the
+production GitHub Environment). Running this script directly from a
+Session-Manager shell bypasses every gate.
+
+If this is a break-glass situation and you've decided you need to:
+  VESTRS_ALLOW_LOCAL_PROD_DEPLOY=1 bash deploy.sh production
+The override is logged.
+GUARD
+      exit 10
+    fi
+    echo "deploy.sh: VESTRS_ALLOW_LOCAL_PROD_DEPLOY override engaged at $(date -u +%FT%TZ) by $(whoami)" >&2
+  fi
+fi
+
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 COMPOSE_FILE="$REPO_ROOT/infra/compose/docker-compose.${ENV_NAME}.yml"
 ENV_FILE="$REPO_ROOT/.env.${ENV_NAME}"
@@ -71,8 +109,13 @@ until curl -fsS --max-time 5 "https://$SMOKE_HOST/healthz" > /dev/null; do
 done
 
 echo "--> running images:"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" images --quiet | while read -r id; do
-  docker inspect --format '{{.Config.Image}} {{.Image}}' "$id"
-done
+# `docker compose images` already prints the image:tag for each
+# service container — that's the audit-trail line we actually want.
+# (The previous version piped IDs through `docker inspect --format
+# '{{.Config.Image}} {{.Image}}'`, but `.Image` isn't a field on
+# inspected containers, which made the entire deploy script exit
+# non-zero under `set -euo pipefail` even though every container had
+# already come up healthy.)
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" images || true
 
 echo "==> deploy ok · $ENV_NAME"

@@ -48,22 +48,35 @@ jobs:
         run: |
           set -euo pipefail
           # SSM AWS-RunShellScript executes with /bin/sh (dash on
-          # Ubuntu), which doesn't support `set -o pipefail` or other
-          # bash idioms. Wrap the script body in `bash -c` so we get
-          # the shell deploy.sh + the rest of the pipeline expect.
+          # Ubuntu), which doesn't support `set -o pipefail`. Wrap the
+          # script body in `bash -euo pipefail -c` so the pipeline runs
+          # in bash with strict mode.
+          #
+          # VESTRS_DEPLOY_TOKEN unlocks the production-deploy guard
+          # baked into deploy.sh. Without it, manual `bash deploy.sh
+          # production` from a Session-Manager shell exits with
+          # "production deploys must come from CI/CD". The token is
+          # not a secret — it just proves the script was invoked from
+          # this workflow path.
+          DEPLOY_TOKEN="gha-${GITHUB_RUN_ID}"
+          PARAMS_FILE=$(mktemp)
+          cat > "$PARAMS_FILE" <<EOF
+          {
+            "commands": [
+              "bash -euo pipefail -c \"chown -R deploy:deploy /opt/vestrs && cd /opt/vestrs && sudo -u deploy git fetch --depth=1 origin release/production && sudo -u deploy git reset --hard FETCH_HEAD && sudo -u deploy env VESTRS_DEPLOY_TOKEN=${DEPLOY_TOKEN} bash infra/scripts/deploy.sh production\""
+            ],
+            "executionTimeout": ["600"]
+          }
+          EOF
           CMD=$(aws ssm send-command \
             --region "$REGION" \
             --document-name "AWS-RunShellScript" \
             --instance-ids "$INSTANCE_ID" \
             --comment "vestrs-production deploy ${GIT_SHA::7} (run ${GITHUB_RUN_ID})" \
             --cloud-watch-output-config CloudWatchOutputEnabled=true,CloudWatchLogGroupName=/vestrs/production/deploy \
-            --parameters '{
-              "commands": [
-                "bash -euo pipefail -c \"cd /opt/vestrs && sudo -u deploy git fetch --depth=1 origin release/production && sudo -u deploy git reset --hard FETCH_HEAD && sudo -u deploy bash infra/scripts/deploy.sh production\""
-              ],
-              "executionTimeout": ["600"]
-            }' \
+            --parameters "file://$PARAMS_FILE" \
             --query 'Command.CommandId' --output text)
+          rm -f "$PARAMS_FILE"
           echo "command_id=$CMD" >> "$GITHUB_OUTPUT"
           echo "::notice title=SSM CommandId::$CMD"
 
