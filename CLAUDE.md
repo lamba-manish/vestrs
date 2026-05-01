@@ -41,7 +41,9 @@ interfaces. Real vendors swap in by replacing the adapter, never the caller.
   as files and reverse-proxies `/` API hosts to FastAPI.
   - Domain: `manishlamba.com`.
   - Production: FE `https://vestrs.manishlamba.com`, API
-    `https://api.vestrs.manishlamba.com` (Swagger at `/docs`).
+    `https://api.vestrs.manishlamba.com` (Swagger at `/docs`),
+    monitoring `https://monitoring.vestrs.manishlamba.com`
+    (self-hosted Grafana, slice 23).
   - Staging: FE `https://staging.vestrs.manishlamba.com`, API
     `https://staging-api.vestrs.manishlamba.com`.
   - GitHub: `https://github.com/lamba-manish/vestrs`.
@@ -627,12 +629,26 @@ observed).
   brings up Prometheus + Grafana + 5 exporters (node, cadvisor,
   postgres, redis, blackbox) on the same compose network. Two
   dashboards auto-provision: **Vestrs · API** + **Vestrs · Host**.
-- Production: a single **grafana-agent** container scrapes the same
-  exporters on the EC2 box and `remote_write`s to **Grafana Cloud
+- Production (default, slice 23): a self-hosted **Prometheus + Grafana**
+  pair runs on the EC2 box. Prometheus scrapes the same exporters
+  (`api`, `node-exporter`, `cadvisor`, `postgres-exporter`,
+  `redis-exporter`, `blackbox-exporter`), 15-day retention, capped
+  at 384 MB RAM and 2 GB on-disk. Grafana auto-provisions the
+  `Vestrs · API` and `Vestrs · Host` dashboards, anonymous and signup
+  off, capped at 256 MB. Caddy fronts it at
+  `https://monitoring.vestrs.manishlamba.com` with HSTS + security
+  headers. Admin credentials come from SSM Parameter Store
+  (`/vestrs/production/GRAFANA_ADMIN_PASSWORD`) via the deploy-time
+  `.env.production` render.
+- Production (alternative): a single **grafana-agent** container
+  scrapes the same exporters and `remote_write`s to **Grafana Cloud
   Mimir** + ships container logs to **Grafana Cloud Loki**. The agent
   only starts when `COMPOSE_PROFILES=cloud-obs` and the
   `GRAFANA_CLOUD_*` env vars are populated; otherwise it's out of
-  the compose graph (zero RAM overhead on the t3.small).
+  the compose graph. The two production options are mutually
+  exclusive — either run on-box or ship to Cloud, never both, since
+  duplicating the scrape doubles the metrics cardinality without
+  adding signal.
 - Alert rules in `infra/observability/grafana/alerts/vestrs-rules.yml`
   load into Prometheus directly; Grafana Cloud Mimir picks them up via
   `mimirtool rules sync` (slice 14D will wire that into CI). Coverage:
@@ -642,9 +658,10 @@ observed).
 - Logs are JSON to stdout; docker's logging driver hands them to
   journald; the agent's Loki source reads them via the Docker socket
   and forwards to Cloud Loki.
-- The cloud agent is the **only** observability process that runs on
-  the production box — no self-hosted Prometheus / Grafana / Loki
-  needed (they live in Cloud).
+- The on-box stack is the **default** observability process.
+  Switching to the cloud agent (when free Grafana Cloud quota is
+  available) is a one-line `COMPOSE_PROFILES=cloud-obs` flip plus
+  filling in the `GRAFANA_CLOUD_*` env vars.
 
 ## 16. Operating principles
 
