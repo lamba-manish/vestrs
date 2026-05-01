@@ -100,7 +100,6 @@ module "oidc_gha" {
   env                      = "staging"
   region                   = var.region
   aws_account_id           = data.aws_caller_identity.current.account_id
-  target_instance_id       = module.ec2.instance_id
   github_oidc_provider_arn = data.terraform_remote_state.bootstrap.outputs.github_oidc_provider_arn
   github_repository        = var.github_repository
 }
