@@ -70,8 +70,13 @@ test("happy path — onboard a new investor end-to-end", async ({ page }) => {
   await page.getByRole("link", { name: /continue to accreditation/i }).click();
 
   // ---------- accreditation (async, polled) ----------
+  // Slice 29: pick the SEC income path, fill the attestation form,
+  // submit. The mock backend resolves to SUCCESS in ~5s.
   await expect(page).toHaveURL(/\/onboarding\/accreditation$/);
-  await page.getByRole("button", { name: /submit accreditation/i }).click();
+  await page.getByRole("radio", { name: /\$200k\+ income/i }).click();
+  await page.getByLabel(/annual income/i).fill("300000.00");
+  await page.getByLabel(/years at or above/i).fill("3");
+  await page.getByRole("button", { name: /submit income attestation/i }).click();
   await expect(page.getByText(/accredited investor/i)).toBeVisible({
     timeout: 30_000,
   });

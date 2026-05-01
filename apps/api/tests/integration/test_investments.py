@@ -61,7 +61,16 @@ async def _onboard_fully(client: AsyncClient, email: str) -> None:
     assert r.json()["data"]["status"] == "success"
     # Accreditation: submit, then resolve via the adapter directly so the
     # test doesn't have to wait the full delay.
-    submit = await client.post("/api/v1/accreditation")
+    submit = await client.post(
+        "/api/v1/accreditation",
+        json={
+            "path": "income",
+            "annual_income_usd": "300000.00",
+            "joint_with_spouse": False,
+            "years_at_or_above": 3,
+            "expects_same_current_year": True,
+        },
+    )
     ref = submit.json()["data"]["provider_reference"]
     check_id = submit.json()["data"]["id"]
 
@@ -241,7 +250,16 @@ async def test_invest_without_bank_is_409(client: AsyncClient, db_session: Async
     )
     assert r.status_code == 201
     await client.post("/api/v1/kyc")
-    submit = await client.post("/api/v1/accreditation")
+    submit = await client.post(
+        "/api/v1/accreditation",
+        json={
+            "path": "income",
+            "annual_income_usd": "300000.00",
+            "joint_with_spouse": False,
+            "years_at_or_above": 3,
+            "expects_same_current_year": True,
+        },
+    )
     ref = submit.json()["data"]["provider_reference"]
     check_id = submit.json()["data"]["id"]
     from app.api import deps as deps_mod

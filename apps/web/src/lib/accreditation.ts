@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import {
   type AccreditationCheck,
+  type AccreditationSubmitValues,
   type AccreditationSummary,
   accreditationCheckSchema,
   accreditationSummarySchema,
@@ -25,8 +26,8 @@ export function useAccreditationSummary() {
 
 export function useSubmitAccreditation() {
   const qc = useQueryClient();
-  return useMutation<AccreditationCheck>({
-    mutationFn: () => api.post("/api/v1/accreditation", accreditationCheckSchema),
+  return useMutation<AccreditationCheck, Error, AccreditationSubmitValues>({
+    mutationFn: (body) => api.post("/api/v1/accreditation", accreditationCheckSchema, { body }),
     onSuccess: () => qc.invalidateQueries({ queryKey: accreditationQueryKey }),
   });
 }
