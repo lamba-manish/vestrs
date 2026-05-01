@@ -47,6 +47,10 @@ jobs:
           GIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          # SSM AWS-RunShellScript executes with /bin/sh (dash on
+          # Ubuntu), which doesn't support `set -o pipefail` or other
+          # bash idioms. Wrap the script body in `bash -c` so we get
+          # the shell deploy.sh + the rest of the pipeline expect.
           CMD=$(aws ssm send-command \
             --region "$REGION" \
             --document-name "AWS-RunShellScript" \
@@ -55,11 +59,7 @@ jobs:
             --cloud-watch-output-config CloudWatchOutputEnabled=true,CloudWatchLogGroupName=/vestrs/production/deploy \
             --parameters '{
               "commands": [
-                "set -euo pipefail",
-                "cd /opt/vestrs",
-                "sudo -u deploy git fetch --depth=1 origin release/production",
-                "sudo -u deploy git reset --hard FETCH_HEAD",
-                "sudo -u deploy bash infra/scripts/deploy.sh production"
+                "bash -euo pipefail -c \"cd /opt/vestrs && sudo -u deploy git fetch --depth=1 origin release/production && sudo -u deploy git reset --hard FETCH_HEAD && sudo -u deploy bash infra/scripts/deploy.sh production\""
               ],
               "executionTimeout": ["600"]
             }' \

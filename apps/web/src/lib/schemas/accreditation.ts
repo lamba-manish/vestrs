@@ -111,9 +111,16 @@ export type ProfessionalCertAccreditationValues = z.input<
   typeof professionalCertAccreditationSchema
 >;
 
-export const accreditationSubmitSchema = z.discriminatedUnion("path", [
-  incomeAccreditationSchema as unknown as z.ZodDiscriminatedUnionOption<"path">,
-  netWorthAccreditationSchema as unknown as z.ZodDiscriminatedUnionOption<"path">,
-  professionalCertAccreditationSchema as unknown as z.ZodDiscriminatedUnionOption<"path">,
-]);
-export type AccreditationSubmitValues = z.input<typeof accreditationSubmitSchema>;
+// We deliberately do NOT use z.discriminatedUnion here. The three
+// per-path schemas above are augmented with .superRefine(), which
+// makes them ZodEffects rather than bare ZodObjects — and zod v3's
+// discriminatedUnion requires the latter. Wrapping ZodEffects throws
+// at *module load* on the production bundle, taking down any page
+// that imports this file in its hook chain (the dashboard, /audit,
+// the route itself). A plain TS union of the input types is enough
+// for the consumers — each form already validates its own subtype
+// with the appropriate per-path schema via zodResolver.
+export type AccreditationSubmitValues =
+  | IncomeAccreditationValues
+  | NetWorthAccreditationValues
+  | ProfessionalCertAccreditationValues;
