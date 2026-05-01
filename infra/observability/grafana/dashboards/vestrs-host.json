@@ -108,6 +108,46 @@
           "refId": "B"
         }
       ]
+    },
+    {
+      "id": 7,
+      "title": "Disk I/O (bytes/s)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "rate(node_disk_read_bytes_total{device!~\"loop.*|dm-.*\"}[2m])",
+          "legendFormat": "read · {{device}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(node_disk_written_bytes_total{device!~\"loop.*|dm-.*\"}[2m])",
+          "legendFormat": "write · {{device}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] }
+    },
+    {
+      "id": 8,
+      "title": "Disk I/O ops (per second)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "expr": "rate(node_disk_reads_completed_total{device!~\"loop.*|dm-.*\"}[2m])",
+          "legendFormat": "read · {{device}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(node_disk_writes_completed_total{device!~\"loop.*|dm-.*\"}[2m])",
+          "legendFormat": "write · {{device}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "iops" }, "overrides": [] }
     }
   ]
 }

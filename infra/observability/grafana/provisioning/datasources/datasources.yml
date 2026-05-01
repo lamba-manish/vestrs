@@ -12,14 +12,16 @@ datasources:
     isDefault: true
     editable: false
 
-  # Loki is configured but unused in local mode (no Loki container in
-  # the dev profile). Kept here so dashboards that include log panels
-  # don't break when imported in environments where Loki is wired up
-  # via grafana-agent → Grafana Cloud Logs.
+  # Loki: on-box log store fed by promtail (slice 24). The UID is
+  # pinned so dashboards reference it stably across rebuilds. In local
+  # dev there's no loki container — Grafana shows "Datasource has no
+  # connection" on the log panels but the dashboards still load.
   - name: Loki
     type: loki
+    uid: vestrs-loki
     access: proxy
     url: http://loki:3100
     editable: false
     jsonData:
       timeout: 10
+      maxLines: 2000
