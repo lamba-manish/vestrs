@@ -59,7 +59,7 @@ jobs:
             --cloud-watch-output-config CloudWatchOutputEnabled=true,CloudWatchLogGroupName=/vestrs/production/deploy \
             --parameters '{
               "commands": [
-                "bash -euo pipefail -c \"cd /opt/vestrs && sudo -u deploy git fetch --depth=1 origin release/production && sudo -u deploy git reset --hard FETCH_HEAD && sudo -u deploy bash infra/scripts/deploy.sh production\""
+                "bash -euo pipefail -c \"chown -R deploy:deploy /opt/vestrs && cd /opt/vestrs && sudo -u deploy git fetch --depth=1 origin release/production && sudo -u deploy git reset --hard FETCH_HEAD && sudo -u deploy bash infra/scripts/deploy.sh production\""
               ],
               "executionTimeout": ["600"]
             }' \
