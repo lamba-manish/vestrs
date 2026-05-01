@@ -63,7 +63,7 @@ function KycContent() {
               <CardTitle>Identity verification</CardTitle>
               <CardDescription>
                 Real providers (Shufti Pro, Jumio, Plaid IDV) plug into the same adapter. The mock
-                returns a deterministic outcome based on your email tag — see hint below.
+                returns instantly; up to three attempts are allowed.
               </CardDescription>
             </div>
             <StatusPill
@@ -84,8 +84,6 @@ function KycContent() {
             <Skeleton className="h-24 w-full" />
           ) : (
             <>
-              <DemoHints />
-
               <div className="rounded-md border border-border bg-card/40 p-4 text-sm leading-6">
                 {status === "not_started" && (
                   <p>
@@ -135,25 +133,6 @@ function KycContent() {
           )}
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function DemoHints() {
-  return (
-    <div className="rounded-md border border-dashed border-border p-4 text-xs leading-5 text-muted-foreground">
-      <p className="mb-1 font-medium text-foreground">Demo controls</p>
-      <ul className="list-disc space-y-0.5 pl-5">
-        <li>
-          Default email → <span className="text-foreground">success</span>.
-        </li>
-        <li>
-          <code>+kyc_fail</code> tag in email → eventual failure with retry.
-        </li>
-        <li>
-          <code>+kyc_pending</code> tag in email → returns pending.
-        </li>
-      </ul>
     </div>
   );
 }

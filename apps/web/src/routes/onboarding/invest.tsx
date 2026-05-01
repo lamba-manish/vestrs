@@ -160,8 +160,6 @@ function InvestContent() {
             </dl>
           </div>
 
-          <DemoHints />
-
           <form noValidate onSubmit={handleSubmit(onSubmit)} className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="amount">Amount ({account.currency})</Label>
@@ -265,24 +263,4 @@ function formatBalance(code: string, amount: string): string {
   const currency = findCurrency(code);
   if (currency) return `${currency.symbol}${amount} ${currency.code}`;
   return `${code} ${amount}`;
-}
-
-function DemoHints() {
-  return (
-    <div className="rounded-md border border-dashed border-border p-4 text-xs leading-5 text-muted-foreground">
-      <p className="mb-1 font-medium text-foreground">Demo controls</p>
-      <ul className="list-disc space-y-0.5 pl-5">
-        <li>
-          Mock balance is seeded at link time. Try an amount under it for a successful placement.
-        </li>
-        <li>
-          Try a very large amount → server returns <code>INSUFFICIENT_BALANCE</code>.
-        </li>
-        <li>
-          Re-submitting the same form replays via the Idempotency-Key — changing the amount with the
-          same key is rejected.
-        </li>
-      </ul>
-    </div>
-  );
 }
