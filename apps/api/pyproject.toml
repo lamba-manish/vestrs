@@ -66,6 +66,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*" = ["S101", "S105", "S106"]
+# Welcome-email template (slice 26): long inline-CSS lines are
+# load-bearing for Outlook compatibility; en/em dashes are deliberate
+# typography in the rendered copy.
+"app/adapters/email/templates.py" = ["E501", "RUF001", "RUF002", "RUF003"]
 
 [tool.black]
 line-length = 100

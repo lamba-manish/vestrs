@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, Request, Response
 
 from app.api.deps import (
     AuthServiceDep,
@@ -21,6 +21,7 @@ from app.core.envelope import success_envelope
 from app.core.rate_limit import limit
 from app.core.security import REFRESH_COOKIE, clear_auth_cookies, set_auth_cookies
 from app.schemas.auth import AuthSuccess, LoginRequest, SignupRequest, UserPublic
+from app.workers import enqueue_welcome_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -41,6 +42,7 @@ async def signup(
     response: Response,
     service: AuthServiceDep,
     ctx: RequestCtxDep,
+    background: BackgroundTasks,
 ) -> dict[str, object]:
     result = await service.signup(
         email=body.email,
@@ -54,6 +56,11 @@ async def signup(
         access_expires=result.tokens.access_expires,
         refresh_expires=result.tokens.refresh_expires,
     )
+    # Welcome email — fire-and-forget via the ARQ worker. BackgroundTasks
+    # runs *after* the response is sent and *after* the DB commit
+    # finishes, so a Redis hiccup or SMTP failure can never roll back
+    # or delay the signup.
+    background.add_task(enqueue_welcome_email, result.user.email)
     return _envelope(request, AuthSuccess(user=UserPublic.model_validate(result.user)))
 
 
