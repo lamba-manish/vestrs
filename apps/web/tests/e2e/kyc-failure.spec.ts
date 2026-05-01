@@ -56,9 +56,11 @@ test("kyc fail → renders reason + retry CTA", async ({ page }) => {
     .click();
   await page.getByRole("button", { name: /^submit kyc/i }).click();
 
-  // failure copy + retry CTA
+  // failure copy + retry CTA — slice 31 humanises the failure_reason,
+  // so the rendered copy is "Document quality insufficient" not the
+  // raw `document_quality_insufficient` snake_case schema value.
   await expect(page.getByText(/reason:/i)).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/document_quality_insufficient/i)).toBeVisible();
+  await expect(page.getByText(/document quality insufficient/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /^retry/i })).toBeVisible();
 
   // retry — still fails deterministically; attempts_remaining drops by 1
