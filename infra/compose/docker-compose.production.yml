@@ -201,18 +201,33 @@ services:
     image: prom/alertmanager:v0.27.0
     restart: always
     user: "65534:65534"
+    # Alertmanager itself does NOT expand ${VAR} inside its YAML, so
+    # we render the SMTP creds at container start with sed and exec
+    # the real binary against the rendered file. The template is
+    # mounted read-only; the rendered file goes into the (writable)
+    # alertmanager-data volume.
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - --config.file=/etc/alertmanager/alertmanager.yml
-      - --storage.path=/alertmanager
-      - --web.listen-address=:9093
-      - --cluster.listen-address=  # disable mesh, single replica
+      - |
+        set -eu
+        sed \
+          -e "s|\$${ALERTMANAGER_SMTP_HOST}|$$ALERTMANAGER_SMTP_HOST|g" \
+          -e "s|\$${ALERTMANAGER_SMTP_USERNAME}|$$ALERTMANAGER_SMTP_USERNAME|g" \
+          -e "s|\$${ALERTMANAGER_SMTP_PASSWORD}|$$ALERTMANAGER_SMTP_PASSWORD|g" \
+          -e "s|\$${ALERTMANAGER_EMAIL_TO}|$$ALERTMANAGER_EMAIL_TO|g" \
+          /etc/alertmanager/alertmanager.yml.tpl > /alertmanager/alertmanager.yml
+        exec /bin/alertmanager \
+          --config.file=/alertmanager/alertmanager.yml \
+          --storage.path=/alertmanager \
+          --web.listen-address=:9093 \
+          --cluster.listen-address=
     environment:
       ALERTMANAGER_SMTP_HOST:     ${ALERTMANAGER_SMTP_HOST:-smtp.gmail.com:587}
       ALERTMANAGER_SMTP_USERNAME: ${ALERTMANAGER_SMTP_USERNAME:-}
       ALERTMANAGER_SMTP_PASSWORD: ${ALERTMANAGER_SMTP_PASSWORD:-}
       ALERTMANAGER_EMAIL_TO:      ${ALERTMANAGER_EMAIL_TO:-manishlamba002@gmail.com}
     volumes:
-      - ../observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ../observability/alertmanager/alertmanager.yml.tpl:/etc/alertmanager/alertmanager.yml.tpl:ro
       - alertmanager-data:/alertmanager
     mem_limit: 96m
     healthcheck:
