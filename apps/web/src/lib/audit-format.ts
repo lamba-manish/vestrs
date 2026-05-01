@@ -142,6 +142,30 @@ export function describeMetadata(action: string, metadata: Record<string, unknow
   }
 }
 
+// ---------- public re-exports for non-audit screens (slice 31) ----------
+//
+// The KYC and Accreditation pages render `failure_reason` and `path`
+// values that come straight from the backend in snake_case. Surfacing
+// `professional_certification` or `document_quality_insufficient`
+// directly leaks schema details to the user. These helpers give every
+// screen a single, consistent way to humanise those values.
+
+const ACCREDITATION_PATH_LABELS: Record<string, string> = {
+  income: "Income test",
+  net_worth: "Net-worth test",
+  professional_certification: "Professional certification",
+};
+
+export function formatAccreditationPath(path: string | null | undefined): string {
+  if (!path) return "—";
+  return ACCREDITATION_PATH_LABELS[path] ?? toTitleCase(path);
+}
+
+export function formatFailureReason(reason: string | null | undefined): string {
+  if (!reason) return "—";
+  return humanizeReason(reason);
+}
+
 /**
  * Human "x ago" rendering. Falls back to a localized date for
  * anything older than ~30 days so the relative copy stays honest.

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
+import { formatFailureReason } from "@/lib/audit-format";
 import { userMessage } from "@/lib/error-messages";
 import { useKycSummary, useRetryKyc, useSubmitKyc } from "@/lib/kyc";
 
@@ -98,7 +99,7 @@ function KycContent() {
                   <p>
                     Reason:{" "}
                     <span className="font-medium">
-                      {summary.data.latest.failure_reason ?? "unknown"}
+                      {formatFailureReason(summary.data.latest.failure_reason)}
                     </span>
                     . Attempts remaining: {remaining}.
                   </p>

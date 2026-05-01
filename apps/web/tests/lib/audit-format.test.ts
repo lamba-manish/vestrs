@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { actionLabel, describeMetadata, relativeTime, statusLabel } from "@/lib/audit-format";
+import {
+  actionLabel,
+  describeMetadata,
+  formatAccreditationPath,
+  formatFailureReason,
+  relativeTime,
+  statusLabel,
+} from "@/lib/audit-format";
 
 describe("actionLabel", () => {
   it("maps known codes to user-facing labels", () => {
@@ -174,5 +181,35 @@ describe("relativeTime", () => {
   it("falls back to a localized date for old entries", () => {
     const out = relativeTime("2026-01-01T12:00:00Z", fixedNow);
     expect(out).not.toMatch(/ago|just now/);
+  });
+});
+
+describe("formatAccreditationPath", () => {
+  it("maps SEC paths to user-facing labels", () => {
+    expect(formatAccreditationPath("income")).toBe("Income test");
+    expect(formatAccreditationPath("net_worth")).toBe("Net-worth test");
+    expect(formatAccreditationPath("professional_certification")).toBe(
+      "Professional certification",
+    );
+  });
+
+  it("handles null / undefined / unknown values without leaking snake_case", () => {
+    expect(formatAccreditationPath(null)).toBe("—");
+    expect(formatAccreditationPath(undefined)).toBe("—");
+    expect(formatAccreditationPath("foo_bar_baz")).toBe("Foo bar baz");
+  });
+});
+
+describe("formatFailureReason", () => {
+  it("title-cases snake_case backend reasons", () => {
+    expect(formatFailureReason("document_quality_insufficient")).toBe(
+      "Document quality insufficient",
+    );
+    expect(formatFailureReason("income_threshold_not_met")).toBe("Income threshold not met");
+  });
+
+  it("renders an em dash for missing reasons rather than 'unknown' / undefined", () => {
+    expect(formatFailureReason(null)).toBe("—");
+    expect(formatFailureReason(undefined)).toBe("—");
   });
 });
