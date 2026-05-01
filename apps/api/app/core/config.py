@@ -70,6 +70,21 @@ class Settings(BaseSettings):
     # pending check.
     accreditation_resolution_delay_seconds: int = 5
 
+    # ---- email (transactional) ----
+    # SMTP creds for the welcome email + future transactional flows.
+    # Reuses the same Gmail SMTP relay alertmanager uses; the from address
+    # must match the authenticated account or Gmail rewrites it.
+    # Empty SMTP_HOST disables sending entirely (the worker logs and exits)
+    # which is the right behaviour in local dev and tests.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_use_tls: bool = True
+    smtp_from_address: str = ""
+    smtp_from_name: str = "Vestrs"
+    public_web_url: str = "http://localhost:3000"
+
     @field_validator("cors_allow_origins", mode="before")
     @classmethod
     def _split_cors_origins(cls, value: Any) -> Any:
