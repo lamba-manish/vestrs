@@ -6,6 +6,7 @@ import { AuthGuard } from "@/components/auth/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { actionLabel, describeMetadata, relativeTime, statusLabel } from "@/lib/audit-format";
 import { useAuditFeed } from "@/lib/audit";
 import type { AuditEntry } from "@/lib/schemas/audit";
 import { cn } from "@/lib/utils";
@@ -53,13 +54,13 @@ function AuditContent() {
             </div>
           ) : entries.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              No audit entries yet. Sign in events, KYC submissions, and investments will appear
+              No audit entries yet. Sign-in events, KYC submissions, and investments will appear
               here.
             </p>
           ) : (
             <ul className="divide-y divide-border">
               {entries.map((entry) => (
-                <Row key={entry.id} entry={entry} />
+                <AuditRow key={entry.id} entry={entry} />
               ))}
             </ul>
           )}
@@ -83,27 +84,24 @@ function AuditContent() {
   );
 }
 
-function Row({ entry }: { entry: AuditEntry }) {
+export function AuditRow({ entry }: { entry: AuditEntry }) {
   const ts = new Date(entry.timestamp);
+  const detail = describeMetadata(entry.action, entry.metadata);
   return (
     <li className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <code className="text-sm font-medium">{entry.action}</code>
+          <span className="text-sm font-medium">{actionLabel(entry.action)}</span>
           <StatusBadge status={entry.status} />
         </div>
-        {hasMeta(entry.metadata) && (
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            {summariseMeta(entry.metadata)}
-          </p>
-        )}
+        {detail && <p className="mt-0.5 truncate text-xs text-muted-foreground">{detail}</p>}
       </div>
       <time
         dateTime={entry.timestamp}
         className="shrink-0 text-xs text-muted-foreground"
-        title={ts.toISOString()}
+        title={ts.toLocaleString()}
       >
-        {ts.toLocaleString()}
+        {relativeTime(entry.timestamp)}
       </time>
     </li>
   );
@@ -123,22 +121,7 @@ function StatusBadge({ status }: { status: string }) {
         tone,
       )}
     >
-      {status}
+      {statusLabel(status)}
     </span>
   );
-}
-
-function hasMeta(metadata: Record<string, unknown>): boolean {
-  return Object.keys(metadata).length > 0;
-}
-
-function summariseMeta(metadata: Record<string, unknown>): string {
-  const parts: string[] = [];
-  for (const [key, value] of Object.entries(metadata)) {
-    if (value === null || value === undefined) continue;
-    const v = typeof value === "object" ? JSON.stringify(value) : String(value);
-    parts.push(`${key}=${v}`);
-    if (parts.length >= 4) break;
-  }
-  return parts.join(" · ");
 }

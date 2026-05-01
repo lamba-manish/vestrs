@@ -108,14 +108,16 @@ test("happy path — onboard a new investor end-to-end", async ({ page }) => {
   // ---------- audit log ----------
   await page.getByRole("link", { name: /view audit log/i }).click();
   await expect(page).toHaveURL(/\/audit$/);
-  for (const action of [
-    "AUTH_SIGNUP",
-    "PROFILE_UPDATED",
-    "KYC_SUBMITTED",
-    "ACCREDITATION_RESOLVED",
-    "BANK_LINKED",
-    "INVESTMENT_CREATED",
+  // Slice 22 humanized these codes — assert the user-facing labels
+  // emitted by lib/audit-format.ts.
+  for (const label of [
+    "Account created",
+    "Profile updated",
+    "KYC submitted",
+    "Accreditation resolved",
+    "Bank linked",
+    "Investment placed",
   ]) {
-    await expect(page.getByText(action).first()).toBeVisible();
+    await expect(page.getByText(label).first()).toBeVisible();
   }
 });

@@ -1,11 +1,16 @@
+import { ArrowRight } from "lucide-react";
 import { useEffect } from "react";
+import { Link } from "react-router-dom";
 
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { deriveOnboardingState, nextActionLabel } from "@/components/onboarding/onboarding-state";
 import { StepRow } from "@/components/onboarding/step-row";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AuditRow } from "@/routes/audit";
 import { useAccreditationSummary } from "@/lib/accreditation";
+import { useAuditFeed } from "@/lib/audit";
 import { useMe } from "@/lib/auth";
 import { useBankSummary } from "@/lib/bank";
 import { useInvestments } from "@/lib/investments";
@@ -43,6 +48,9 @@ function DashboardContent() {
   const kycDone = state.kyc === "success";
   const accDone = state.accreditation === "success";
   const bankDone = state.bank === "success";
+
+  const audit = useAuditFeed();
+  const recent = audit.data?.pages[0]?.items.slice(0, 5) ?? [];
 
   const loading =
     profile.isLoading || kyc.isLoading || acc.isLoading || bank.isLoading || investments.isLoading;
@@ -122,6 +130,38 @@ function DashboardContent() {
                 actionLabel={nextActionLabel(state.invest)}
               />
             </ol>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+          <div>
+            <CardTitle>Recent activity</CardTitle>
+            <CardDescription>Last few audit entries from your onboarding flow.</CardDescription>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/audit">
+              Full log
+              <ArrowRight className="size-3.5" aria-hidden="true" />
+            </Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {audit.isLoading ? (
+            <div className="space-y-2">
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : recent.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No activity yet.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {recent.map((entry) => (
+                <AuditRow key={entry.id} entry={entry} />
+              ))}
+            </ul>
           )}
         </CardContent>
       </Card>
