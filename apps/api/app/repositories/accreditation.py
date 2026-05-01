@@ -46,6 +46,8 @@ class AccreditationRepository:
         provider_reference: str,
         requested_at: datetime,
         raw_response: dict[str, Any],
+        path: str | None = None,
+        path_data: dict[str, Any] | None = None,
     ) -> AccreditationCheck:
         check = AccreditationCheck(
             user_id=user_id,
@@ -55,6 +57,8 @@ class AccreditationRepository:
             provider_reference=provider_reference,
             requested_at=requested_at,
             raw_response=raw_response,
+            path=path,
+            path_data=path_data or {},
         )
         self.session.add(check)
         await self.session.flush()

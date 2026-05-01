@@ -14,7 +14,11 @@ from app.core.envelope import success_envelope
 from app.core.rate_limit import limit
 from app.models.accreditation import AccreditationStatus
 from app.repositories.accreditation import AccreditationRepository
-from app.schemas.accreditation import AccreditationCheckPublic, AccreditationSummary
+from app.schemas.accreditation import (
+    AccreditationCheckPublic,
+    AccreditationSubmitRequest,
+    AccreditationSummary,
+)
 from app.workers import enqueue_accreditation_resolve
 
 router = APIRouter(prefix="/accreditation", tags=["accreditation"])
@@ -45,12 +49,13 @@ async def get_status(
     dependencies=[Depends(limit(times=20, seconds=3600, bucket="accreditation:submit"))],
 )
 async def submit(
+    body: AccreditationSubmitRequest,
     request: Request,
     user: CurrentUserDep,
     service: AccreditationServiceDep,
     ctx: RequestCtxDep,
 ) -> dict[str, object]:
-    outcome = await service.submit(user=user, ctx=ctx)
+    outcome = await service.submit(user=user, ctx=ctx, body=body)
     if outcome.enqueue_after_seconds > 0:
         await enqueue_accreditation_resolve(
             outcome.check.id, defer_seconds=outcome.enqueue_after_seconds

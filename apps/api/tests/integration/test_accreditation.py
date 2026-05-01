@@ -45,6 +45,23 @@ async def _signup(client: AsyncClient, email: str) -> None:
     assert r.status_code == 201, r.text
 
 
+# Default income-path body that satisfies SEC criteria. Tests that need
+# a failure outcome should pass an explicit body to _post_accreditation.
+_INCOME_PATH_OK: dict[str, object] = {
+    "path": "income",
+    "annual_income_usd": "300000.00",
+    "joint_with_spouse": False,
+    "years_at_or_above": 3,
+    "expects_same_current_year": True,
+}
+
+
+async def _post_accreditation(
+    client: AsyncClient, body: dict[str, object] | None = None
+) -> object:  # type: ignore[name-defined]
+    return await client.post("/api/v1/accreditation", json=body or _INCOME_PATH_OK)
+
+
 async def _audit_actions(session: AsyncSession) -> list[tuple[str, str]]:
     rows = await session.execute(
         select(AuditLog.action, AuditLog.status).order_by(AuditLog.timestamp)
@@ -71,7 +88,7 @@ async def test_submit_returns_pending_and_audits(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
     await _signup(client, EMAIL_OK)
-    r = await client.post("/api/v1/accreditation")
+    r = await _post_accreditation(client)
     assert r.status_code == 202, r.text
     data = r.json()["data"]
     assert data["status"] == AccreditationStatus.PENDING.value
@@ -88,8 +105,8 @@ async def test_submit_returns_pending_and_audits(
 
 async def test_double_submit_is_409(client: AsyncClient) -> None:
     await _signup(client, EMAIL_OK)
-    await client.post("/api/v1/accreditation")
-    r = await client.post("/api/v1/accreditation")
+    await _post_accreditation(client)
+    r = await _post_accreditation(client)
     assert r.status_code == 409
     assert r.json()["error"]["code"] == "CONFLICT"
 
@@ -101,7 +118,7 @@ async def test_resolve_check_flips_pending_to_success(
     client: AsyncClient, db_session: AsyncSession, adapter: MockAccreditationAdapter
 ) -> None:
     await _signup(client, EMAIL_OK)
-    submit = await client.post("/api/v1/accreditation")
+    submit = await _post_accreditation(client)
     check_id = submit.json()["data"]["id"]
     provider_ref = submit.json()["data"]["provider_reference"]
 
@@ -126,7 +143,7 @@ async def test_resolve_check_flips_pending_to_failed(
     client: AsyncClient, db_session: AsyncSession, adapter: MockAccreditationAdapter
 ) -> None:
     await _signup(client, EMAIL_FAIL)
-    submit = await client.post("/api/v1/accreditation")
+    submit = await _post_accreditation(client)
     provider_ref = submit.json()["data"]["provider_reference"]
     check_id = submit.json()["data"]["id"]
 
@@ -154,7 +171,7 @@ async def test_resolve_check_on_terminal_returns_terminal(
     client: AsyncClient, adapter: MockAccreditationAdapter
 ) -> None:
     await _signup(client, EMAIL_OK)
-    submit = await client.post("/api/v1/accreditation")
+    submit = await _post_accreditation(client)
     check_id = submit.json()["data"]["id"]
     ref = submit.json()["data"]["provider_reference"]
 
@@ -176,7 +193,7 @@ async def test_resolve_check_still_pending_returns_terminal_false(
     client: AsyncClient, adapter: MockAccreditationAdapter
 ) -> None:
     await _signup(client, EMAIL_OK)
-    submit = await client.post("/api/v1/accreditation")
+    submit = await _post_accreditation(client)
     check_id = submit.json()["data"]["id"]
 
     # Don't force-resolve — adapter still says PENDING (resolves_at is in
@@ -194,5 +211,5 @@ async def test_resolve_check_still_pending_returns_terminal_false(
 async def test_endpoints_require_auth(client: AsyncClient) -> None:
     r = await client.get("/api/v1/accreditation")
     assert r.status_code == 401
-    r = await client.post("/api/v1/accreditation")
+    r = await _post_accreditation(client)
     assert r.status_code == 401

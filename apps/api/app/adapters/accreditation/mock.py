@@ -66,9 +66,21 @@ class MockAccreditationAdapter:
         nationality: str | None,
         domicile: str | None,
         delay_seconds: int,
+        path: str,
+        path_passes_sec: bool,
+        path_failure_reason: str | None,
+        path_data: dict[str, Any],
     ) -> AccreditationCheckResult:
+        # Email-based override stays as the legacy escape hatch (lets
+        # the e2e suite force-fail accreditation regardless of path).
         local = email.split("@", 1)[0].lower()
-        will_fail = "+acc_fail" in local
+        forced_fail = "+acc_fail" in local
+        will_fail = forced_fail or not path_passes_sec
+        terminal_reason = (
+            "income_documentation_insufficient"
+            if forced_fail
+            else (path_failure_reason if will_fail else None)
+        )
         ref = _ref()
         resolves_at = _now() + timedelta(seconds=delay_seconds)
         raw = {
@@ -78,6 +90,8 @@ class MockAccreditationAdapter:
                 "full_name_present": full_name is not None,
                 "nationality": nationality,
                 "domicile": domicile,
+                "path": path,
+                "path_data": path_data,
             },
         }
         entry = {
@@ -85,7 +99,7 @@ class MockAccreditationAdapter:
             "terminal": (
                 AccreditationStatus.FAILED.value if will_fail else AccreditationStatus.SUCCESS.value
             ),
-            "failure_reason": ("income_documentation_insufficient" if will_fail else None),
+            "failure_reason": terminal_reason,
             "raw": raw,
             "forced_terminal": False,
         }

@@ -27,6 +27,13 @@ from app.models.audit_log import AuditAction, AuditStatus
 from app.models.user import User
 from app.repositories.accreditation import AccreditationRepository
 from app.repositories.audit_logs import AuditLogRepository
+from app.schemas.accreditation import (
+    IncomeAccreditation,
+    NetWorthAccreditation,
+    ProfessionalCertAccreditation,
+    evaluate_path_outcome,
+    serialise_path_data,
+)
 from app.services.auth import RequestContext
 
 log = get_logger("api.accreditation")
@@ -68,7 +75,13 @@ class AccreditationService:
         self.provider = provider
         self.settings = settings
 
-    async def submit(self, *, user: User, ctx: RequestContext) -> SubmitOutcome:
+    async def submit(
+        self,
+        *,
+        user: User,
+        ctx: RequestContext,
+        body: IncomeAccreditation | NetWorthAccreditation | ProfessionalCertAccreditation,
+    ) -> SubmitOutcome:
         latest = await self.accreditation.latest_for_user(user.id)
         if latest is not None and not latest.is_terminal:
             await AuditLogRepository.write_independent(
@@ -99,6 +112,9 @@ class AccreditationService:
             (await self.accreditation.attempt_count(user.id)) + 1 if latest is not None else 1
         )
 
+        passes, failure_reason = evaluate_path_outcome(body)
+        path_data = serialise_path_data(body)
+
         result = await self.provider.submit_check(
             user_id=user.id,
             email=user.email,
@@ -106,6 +122,10 @@ class AccreditationService:
             nationality=user.nationality,
             domicile=user.domicile,
             delay_seconds=delay,
+            path=body.path,
+            path_passes_sec=passes,
+            path_failure_reason=failure_reason,
+            path_data=path_data,
         )
         check = await self.accreditation.create(
             user_id=user.id,
@@ -115,6 +135,8 @@ class AccreditationService:
             provider_reference=result.provider_reference,
             requested_at=_now(),
             raw_response=result.raw,
+            path=body.path,
+            path_data=path_data,
         )
         await self.audit.write(
             action=AuditAction.ACCREDITATION_SUBMITTED,
@@ -130,6 +152,8 @@ class AccreditationService:
                 "provider_status": result.status.value,
                 "provider": self.provider.name,
                 "delay_seconds": delay,
+                "path": body.path,
+                "path_passes_sec": passes,
             },
         )
 

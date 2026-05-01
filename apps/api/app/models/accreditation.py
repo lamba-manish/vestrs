@@ -34,6 +34,29 @@ class AccreditationStatus(StrEnum):
     FAILED = "failed"
 
 
+class AccreditationPath(StrEnum):
+    """The three paths to accredited-investor status under SEC Reg D 506(c).
+
+    See the SEC's accredited-investors guide referenced in the brief:
+    https://www.sec.gov/resources-small-businesses/capital-raising-building-blocks/accredited-investors
+
+    INCOME: $200k individual / $300k joint with spouse, in each of the
+    two most recent years, with a reasonable expectation of reaching the
+    same income level in the current year.
+
+    NET_WORTH: net worth ≥ $1M (individually or jointly with spouse),
+    excluding the value of the primary residence.
+
+    PROFESSIONAL_CERTIFICATION: holding (in good standing) Series 7,
+    Series 65, or Series 82 license. Other professional credentials
+    exist; we model the three FINRA licenses Reg D explicitly names.
+    """
+
+    INCOME = "income"
+    NET_WORTH = "net_worth"
+    PROFESSIONAL_CERTIFICATION = "professional_certification"
+
+
 class AccreditationCheck(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "accreditation_checks"
     __table_args__ = (
@@ -47,6 +70,12 @@ class AccreditationCheck(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Slice 29: which SEC path the user invoked. Nullable so historical
+    # rows (pre-slice-29) keep loading; new submissions are always set.
+    path: Mapped[str | None] = mapped_column(String(32))
+    # Path-specific input persisted as JSONB so we can audit what the
+    # user attested to. Decimal money values are serialised as strings.
+    path_data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     provider_name: Mapped[str] = mapped_column(String(32), nullable=False)
     provider_reference: Mapped[str | None] = mapped_column(String(128))
     failure_reason: Mapped[str | None] = mapped_column(String(255))

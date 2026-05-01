@@ -29,6 +29,14 @@ class AccreditationProvider(Protocol):
         nationality: str | None,
         domicile: str | None,
         delay_seconds: int,
+        # Slice 29: which SEC path the user invoked + the attestation
+        # values, already validated against the regulatory thresholds.
+        # The adapter uses these to pre-decide the eventual terminal
+        # status for the mock; a real vendor would forward them.
+        path: str,
+        path_passes_sec: bool,
+        path_failure_reason: str | None,
+        path_data: dict[str, Any],
     ) -> AccreditationCheckResult:
         """Start a new accreditation review. Almost always returns
         ``PENDING`` — vendors don't decide on the spot."""
