@@ -1,0 +1,51 @@
+# Promtail config (slice 24).
+#
+# Tails every docker container's stdout/stderr via the docker daemon
+# log driver and ships JSON-formatted lines to the on-box Loki. We
+# discover containers via the docker socket; new containers are picked
+# up automatically without restarts.
+#
+# Labels emitted on every line:
+#   stack          — compose project name (vestrs-production)
+#   service        — compose service name  (api, worker, postgres, …)
+#   container      — actual container name as docker assigns it
+#   container_id   — short id, useful when names clash across restarts
+#
+# The api/worker emit JSON lines from structlog; promtail does *not*
+# parse them into per-field labels — high-cardinality labels would blow
+# up Loki's index. We just ship the JSON intact and rely on Grafana's
+# "json" parser at query time.
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /var/lib/promtail/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    backoff_config:
+      min_period: 1s
+      max_period: 30s
+      max_retries: 10
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: container
+      - source_labels: ["__meta_docker_container_id"]
+        regex: "(.{12}).*"
+        target_label: container_id
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_project"]
+        target_label: stack
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: service
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: stream
