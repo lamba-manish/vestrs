@@ -122,20 +122,3 @@ groups:
         annotations:
           summary: "TLS certificate expires in < 14 days"
           description: "Caddy auto-renews; if this fires, ACME may be failing."
-
-  - name: vestrs-smoke
-    interval: 60s
-    rules:
-      # Canary alert that always fires after 1 minute. Lets the operator
-      # verify prometheus → alertmanager → SMTP end-to-end without
-      # waiting for a real outage. Delete once you've received the
-      # confirmation email; the rule is harmless but noisy if left in.
-      - alert: AlertingPipelineSmokeTest
-        expr: vector(1)
-        for: 1m
-        labels:
-          severity: ticket
-          team: platform
-        annotations:
-          summary: "Alerting pipeline smoke test"
-          description: "If you see this email, prometheus → alertmanager → SMTP is wired up."

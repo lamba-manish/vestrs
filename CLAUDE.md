@@ -499,8 +499,7 @@ Rules:
 **Server-side branch protection is ON** as of slice 13. The repo was
 flipped to **public** in slice 13 to unlock free Actions minutes,
 classic branch-protection rules, and SonarCloud's free tier. The
-following ruleset is enforced on `main`, `release/staging`, and
-`release/production`:
+following ruleset is enforced on `main`:
 
 - Required status checks (must pass before merge): every job in
   `ci.yml`, `e2e.yml`, `security.yml`, and `sonarcloud.yml`.
@@ -508,6 +507,22 @@ following ruleset is enforced on `main`, `release/staging`, and
 - No direct pushes (PR-only).
 - No force-push, no branch deletion.
 - Linear history required (squash-merge only).
+
+`release/staging` + `release/production` (slice 27): force-push and
+deletion blocked, linear history required, but no PR/review gate at
+the branch level — a fast-forward push from `main:release/<env>` is
+how promotion happens. The actual deploy gate lives one layer up:
+the `Deploy · production` GHA workflow declares
+`environment: production`, and the GitHub `production` Environment
+has a required-reviewer (`lamba-manish`) configured. The workflow
+pauses at the SSM-deploy step until that reviewer clicks **Approve**
+in the Actions UI. So the end-to-end gates on a prod deploy are:
+
+  1. Slice PR → `main` (12 status checks + 1 review)
+  2. `git push origin main:release/production` (fast-forward only)
+  3. Release workflow builds + pushes images to GHCR
+  4. Deploy workflow waits at the production Environment for human
+     approval before running `ssm SendCommand → deploy.sh`
 
 Pre-commit hooks remain in place as the first line of defence; CI is
 the second.
@@ -625,6 +640,12 @@ observed).
 - API exposes `/metrics` via `prometheus-fastapi-instrumentator`.
   `/metrics` and `/healthz` are excluded from the latency histogram so
   the per-route panels reflect real user traffic.
+- `/healthz` is a real **readiness probe** (slice 27): on every call
+  it does a Postgres `SELECT 1` and a Redis `PING`. Returns 200 with
+  the canonical envelope on full health; 503 with `error.code =
+  SERVICE_UNAVAILABLE` and a `data.checks` block if either dependency
+  is wedged. Caddy's smoke test, `deploy.sh`, and the blackbox
+  exporter all key off this — silent failures are no longer possible.
 - Local-dev compose profile **`observability`** (opt-in via `make obs-up`)
   brings up Prometheus + Grafana + 5 exporters (node, cadvisor,
   postgres, redis, blackbox) on the same compose network. Two

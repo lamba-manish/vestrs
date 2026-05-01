@@ -28,6 +28,12 @@ log = get_logger("api.rate_limit")
 _redis: aioredis.Redis[str] | None = None
 
 
+def get_redis() -> aioredis.Redis[str] | None:
+    """Module-level accessor for the lifespan-bound Redis client.
+    Used by /healthz so we don't open a second connection just to ping."""
+    return _redis
+
+
 @asynccontextmanager
 async def rate_limiter_lifespan(app: FastAPI, settings: Settings) -> AsyncIterator[None]:
     global _redis
