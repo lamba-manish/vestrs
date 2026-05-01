@@ -1,12 +1,12 @@
 # Caddy config — production.
 #
-# Two virtual hosts:
-#   vestrs.manishlamba.com       → static SPA from /srv/web
-#   api.vestrs.manishlamba.com   → reverse-proxy to api:8000
+# Three virtual hosts:
+#   vestrs.manishlamba.com              → static SPA from /srv/web
+#   api.vestrs.manishlamba.com          → reverse-proxy to api:8000
+#   monitoring.vestrs.manishlamba.com   → reverse-proxy to grafana:3000 (slice 23)
 #
 # Identical to the staging config except for hostnames and the CSP
 # connect-src. Keep them in lock-step when you change either.
-
 {
 	email {$ACME_EMAIL}
 	servers {
@@ -75,6 +75,50 @@ api.vestrs.manishlamba.com {
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# ----------------------------------------------------------------------
+#   Monitoring (self-hosted Grafana, slice 23)
+#   https://monitoring.vestrs.manishlamba.com
+# ----------------------------------------------------------------------
+# Grafana ships its own login screen (admin / SSM-sourced password),
+# anonymous access is disabled at the app level, and signup is off — so
+# the only authenticated identities are the ones a Grafana admin
+# explicitly creates. We don't add a second Caddy basic-auth layer
+# because that would mask Grafana's session cookies and break the
+# WebSocket / live-tail streams panels use.
+#
+# CSP intentionally permits inline scripts / styles + WebSocket — Grafana
+# requires both for its UI and live data streams. The monitoring host is
+# an admin-only surface, not a customer page, so the looser CSP is
+# acceptable here.
+monitoring.vestrs.manishlamba.com {
+	encode zstd gzip
+
+	reverse_proxy grafana:3000 {
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto https
+		# Grafana streams live data via WebSocket on /api/live/.
+		transport http {
+			dial_timeout 5s
+			read_timeout 600s
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), camera=(), microphone=()"
 		-Server
 	}
 

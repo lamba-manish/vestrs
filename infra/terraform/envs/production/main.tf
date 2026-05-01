@@ -83,6 +83,7 @@ module "dns" {
   records = [
     "vestrs.${var.dns_zone_name}",
     "api.vestrs.${var.dns_zone_name}",
+    "monitoring.vestrs.${var.dns_zone_name}",
   ]
   target_ip = module.ec2.elastic_ip
 }

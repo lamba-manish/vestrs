@@ -191,6 +191,79 @@ services:
     profiles:
       - cloud-obs
 
+  # ---------- self-hosted Grafana stack (slice 23) ----------
+  # Runs by default. Replaces the cloud-obs grafana-agent above for
+  # boxes that don't have a Grafana Cloud account. Memory budget on a
+  # t3.small (2GB RAM + 2GB swap) is tight, so retention is short and
+  # mem_limits are explicit.
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: always
+    user: "65534:65534"  # nobody:nogroup — same UID Prometheus expects.
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=2GB
+      - --web.enable-lifecycle
+      - --web.listen-address=:9090
+    volumes:
+      - ../observability/prometheus/prometheus.production.yml:/etc/prometheus/prometheus.yml:ro
+      - ../observability/grafana/alerts:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      api: { condition: service_healthy }
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    restart: always
+    environment:
+      # Admin login — set via SSM Parameter Store, never default-public.
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      # Anonymous access off; signup off; users must log in.
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+      # Public URL is required for OAuth-style flows + correct redirects
+      # behind the Caddy reverse proxy.
+      GF_SERVER_ROOT_URL: https://monitoring.vestrs.manishlamba.com/
+      GF_SERVER_DOMAIN: monitoring.vestrs.manishlamba.com
+      # Cookie hardening (Caddy terminates TLS in front of us).
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_COOKIE_SAMESITE: strict
+      GF_SECURITY_STRICT_TRANSPORT_SECURITY: "true"
+      GF_SECURITY_CONTENT_TYPE_PROTECTION: "true"
+      GF_SECURITY_X_CONTENT_TYPE_OPTIONS: "true"
+      GF_SECURITY_X_XSS_PROTECTION: "true"
+      # Telemetry off — this is a private monitoring host.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      # Disable the public news feed and update banners.
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    volumes:
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus: { condition: service_healthy }
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
 volumes:
   postgres-data:
   redis-data:
@@ -198,3 +271,5 @@ volumes:
   caddy-config:
   web-dist:
   agent-data:
+  prometheus-data:
+  grafana-data:
